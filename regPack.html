@@ -80,6 +80,8 @@ function resultMessage(sourceSize, resultSize)
 /**
  * First stage : apply the algorithm common to First Crush and JS Crush
  * Store the matches along with inner details in the array matchesLookup
+ *
+ * Code derived from Aivo Pass' Js Crush (www.iteral.com/jscrush/)
  */
 function configurable_crush(input, environment){
 	var gainFactor = parseFloat(document.getElementById("paramFGain").value);
@@ -132,6 +134,7 @@ function configurable_crush(input, environment){
 
 /**
  * Clears a match from matchLookup for dependencies
+ * Used internally by the second stage 
  */
 function clear(matchIndex) {
 	var oldToken = matchesLookup[matchIndex].token;
@@ -169,12 +172,6 @@ function regPack(input, environment)
 			}
 		}
 	}
-	/** debug only
-	for (i=0; i<matchesLookup.length; ++i) {
-		c=matchesLookup[i];
-		details += c.token.charCodeAt(0)+"("+c.token+") str1 = "+c.string+" str2 = "+c.originalString+" depends = /"+c.depends+"/\n";
-	}
-	*/
 	
 	// Define the token list that will be used by ordering blocks, from the largest to the smallest
 	// Blocks are 4 or more contiguous characters : "ABCDE" can be shortened to "A-E" in the RegExp
@@ -256,7 +253,7 @@ function regPack(input, environment)
 					++tokenLine;
 					tokenIndex=1;
 				}
-				// skip CR and LF characters
+				// skip CR and LF characters that would otherwise be included in the first block (1-31)
 				if (tokenList[tokenLine].first==1 && (tokenIndex==10 || tokenIndex==13)) {
 					++tokenIndex;
 				}
@@ -279,7 +276,7 @@ function regPack(input, environment)
 		}
 	}
 	
-	// add the last token to the list / toke, string
+	// add the last used token to the list
 	tokenString+=String.fromCharCode(tokenList[tokenLine].first);
 	if (tokenIndex>2) {
 		tokenString+="-";
@@ -288,7 +285,7 @@ function regPack(input, environment)
 		tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
 	}
 
-	// add the unpacking code to the compressed string
+	// append the unpacking code to the compressed string
 	var checkedString = regPackOutput;
 	c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 	regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
@@ -297,6 +294,7 @@ function regPack(input, environment)
 	var originalSize = encodeURI(input).replace(/%../g,'i').length;
 	var resultSize = encodeURI(regPackOutput).replace(/%../g,'i').length;
 	
+	// Check that the compression can be reversed with no loss
 	details+="------------------------\nFinal check : ";
 	var regToken = new RegExp("["+tokenString+"]","");
 	for(var token="" ; token = regToken.exec(checkedString) ; ) {
