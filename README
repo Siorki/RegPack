@@ -1,0 +1,14 @@
+RegPack is an experimental packer for Javascript code.
+
+It works in two stages :
+ - the first stage is pretty similar to JS Crush (by Aivo Paas) and First Crush (by Tim Down) and its output is shown in the first box
+ - the second stage performs the operations needed to turn the token list into a regular expression. Its result ends up in the second box
+ 
+The second stage usually shave around 20 bytes, sometimes up to 30.
+
+Tips for using it :
+  - settings alter the choice of strings to compress. 1/0/0 is a good allrounder, although more exotic values can yield better results depending on your code.
+  - "Pack with(Math)" get rid of all "Math." references in the code and enclose the evaluation with(Math). Gain a few extra bytes, but can slow down the execution.
+  
+Any feedback or improvement suggestions appreciated.
+@Siorki on Twitter
