@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>RegPack</title>
+</head>
+<body>
+Copy original source here
+<br><textarea rows=12 cols=70 id="originalString"></textarea><br><button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
+Score = <input type="text" size=6 value=1 id="paramFGain" />
+*gain + <input type="text" size=6 value=0 id="paramFLength" />
+*length + <input type="text" size=6 value=0 id="paramFCopies" />
+*copies
+&nbsp;&nbsp;&nbsp;
+Tiebreaker = <select id="paramFTiebreaker">
+<option value=1 selected>longest string first (Js Crush)</option>
+<option value=-1 >most copies first (First Crush)</option>
+</select>
+<br><i>Default settings match built-in formulas for both JS Crush and First Crush. 2/1/0 sometimes achieve better results.</i>
+<br><b>Configurable Crush : </b><b id="crushResult"></b><br><textarea rows=12 cols=70 id="packedString"></textarea><textarea rows=12 cols=70 id="packDetails"></textarea><br>
+<br><b>RegPack : </b><b id="regPackResult"></b><br><textarea rows=12 cols=70 id="regPackedString"></textarea><textarea rows=12 cols=70 id="regPackDetails"></textarea><br>
+ 
+<script>
+(function() {
+  var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
+                              window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+  window.requestAnimationFrame = requestAnimationFrame;
+  
+ 
+})();
+
+var b=document.body;
+var matchesLookup = [];
+var input='';
+var originalLength=0;
+var modifier = '';
+
+document.getElementById("packAction").onclick=function()
+{
+	input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'').replace(/\\/g,'\\\\');
+	originalLength=encodeURI(input).replace(/%../g,'i').length;
+	document.getElementById("packedString").value = document.getElementById("packDetails").value = "";
+	document.getElementById("regPackedString").value = document.getElementById("regPackDetails").value = "";
+	var output = configurable_crush(input,'');
+	document.getElementById("packedString").value = output[2];
+	document.getElementById("packDetails").value = output[3];
+	document.getElementById("crushResult").innerHTML = resultMessage(originalLength, output[1]);
+	requestAnimationFrame(callRegPack);
+}
+
+document.getElementById("mathPackAction").onclick=function()
+{
+	input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'').replace(/\\/g,'\\\\');
+	originalLength=encodeURI(input).replace(/%../g,'i').length;
+	input = input.replace(/Math\./g, "");
+	document.getElementById("packedString").value = document.getElementById("packDetails").value = "";
+	document.getElementById("regPackedString").value = document.getElementById("regPackDetails").value = "";
+	modifier = 'with(Math)';
+	var output = configurable_crush(input,modifier);
+	document.getElementById("packedString").value = output[2];
+	document.getElementById("packDetails").value = output[3];
+	document.getElementById("crushResult").innerHTML = resultMessage(originalLength, output[1]);
+	requestAnimationFrame(callRegPack);
+}
+
+function callRegPack()
+{
+	var output = regPack(input, modifier);
+	document.getElementById("regPackedString").value = output[2];
+	document.getElementById("regPackDetails").value = output[3];
+	document.getElementById("regPackResult").innerHTML = resultMessage(originalLength, output[1]);
+}
+
+function resultMessage(sourceSize, resultSize)
+{
+	return sourceSize+'B to '+resultSize+'B ('+(resultSize-sourceSize)+'B, '+(((resultSize-sourceSize)/sourceSize*1e4|0)/100)+'%)'
+}
+
+
+/**
+ * First stage : apply the algorithm common to First Crush and JS Crush
+ * Store the matches along with inner details in the array matchesLookup
+ */
+function configurable_crush(input, environment){
+	var gainFactor = parseFloat(document.getElementById("paramFGain").value);
+	var lengthFactor = parseFloat(document.getElementById("paramFLength").value);
+	var copiesFactor = parseFloat(document.getElementById("paramFCopies").value);
+	var tiebreakerFactor = parseInt(document.getElementById("paramFTiebreaker").value);
+
+	var s;
+	matchesLookup = [];
+	details='';
+	Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
+	s=input,B=s.length/2,m='';
+	for(S=encodeURI(s).replace(/%../g,'i').length;;m=c+m) {
+		for(c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
+		if(!c)break;
+		for(o={}, bestLength=bestValue=M=N=e=Z=0, t=1;++t<=B;)
+			for(i=0;++i<s.length-t;)
+				if(!o[x=s.substr(j=i,t)])
+				{
+					if(~(j=s.indexOf(x,j+t)))
+					{
+						for(Z=t,o[x]=1;~j;o[x]++)
+						{
+							j=s.indexOf(x,j+t);
+						}
+					}
+				}
+		B=Z;
+		for(i in o){
+			j=encodeURI(i).replace(/%../g,'i').length;
+			R=o[i];
+			Z=R*j-R-j-2;	// -1 used in JS Crush performs replacement with zero gain
+			value=gainFactor*Z+lengthFactor*j+copiesFactor*R;
+			if(Z>0)
+				if(value>bestValue||bestValue==value&&(Z>M||Z==M&&(tiebreakerFactor*R>tiebreakerFactor*N))) // R>N JsCrush, R<N First Crush
+					M=Z,N=R,e=i,bestValue=value,bestLength=j;
+		}
+		if(!e)
+			break;
+		s=s.split(e).join(c)+c+e;
+		matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false});
+		details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
+	}
+		
+	c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
+	i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+m+B+')with(_.split(g[i]))_=join(pop());'+environment+'eval(_)';
+	var resultSize = encodeURI(i).replace(/%../g,'i').length;;
+	return [S, resultSize, i, details];
+}
+
+/**
+ * Clears a match from matchLookup for dependencies
+ */
+function clear(matchIndex) {
+	var oldToken = matchesLookup[matchIndex].token;
+	for (var j=0;j<matchesLookup.length;++j) {
+		matchesLookup[j].usedBy = matchesLookup[j].usedBy.split(oldToken).join("");
+	}
+	matchesLookup[matchIndex].cleared=true;
+}
+
+/**
+ * Second stage : extra actions required to reduce the token string to a RegExp
+ *
+ * Needs and modifies the matchesLookup array
+ */
+function regPack(input, environment) 
+{
+	var gainFactor = parseFloat(document.getElementById("paramFGain").value);
+	var lengthFactor = parseFloat(document.getElementById("paramFLength").value);
+	var copiesFactor = parseFloat(document.getElementById("paramFCopies").value);
+	var tiebreakerFactor = parseInt(document.getElementById("paramFTiebreaker").value);
+
+	var details = '';
+	// First, re-expand the packed strings so that they no longer contain any compression token
+	// since we will be storing them in a different order.
+	// Use this step to establish a dependency graph (compressed strings containing other compressed strings)
+	for (var i=0;i<matchesLookup.length;++i) {
+		for (var j=0; j<matchesLookup.length;++j) {
+			if (matchesLookup[j].originalString.indexOf(matchesLookup[i].token)>-1) {
+				matchesLookup[j].originalString = matchesLookup[j].originalString.split(matchesLookup[i].token).join(matchesLookup[i].originalString);
+			}
+			if (i!=j && matchesLookup[j].originalString.indexOf(matchesLookup[i].originalString)>-1) {
+				matchesLookup[j].depends += matchesLookup[i].token;
+				matchesLookup[i].usedBy += matchesLookup[j].token;
+				
+			}
+		}
+	}
+	/** debug only
+	for (i=0; i<matchesLookup.length; ++i) {
+		c=matchesLookup[i];
+		details += c.token.charCodeAt(0)+"("+c.token+") str1 = "+c.string+" str2 = "+c.originalString+" depends = /"+c.depends+"/\n";
+	}
+	*/
+	
+	// Define the token list that will be used by ordering blocks, from the largest to the smallest
+	// Blocks are 4 or more contiguous characters : "ABCDE" can be shortened to "A-E" in the RegExp
+	// The gain from RegPack over the original JSCrush and First Crush comes essentially from that.
+	var tokenList = [];
+	var firstInLine = -1;
+	for(i=1;i<127;++i) {
+		var token = String.fromCharCode(i);
+		if (i!=34 && i!=39 && i!=92 && input.indexOf(token)==-1) {
+			if (firstInLine ==-1) {
+				firstInLine = i;
+			}
+		} else {
+			if (firstInLine >-1) {
+				tokenList.push({first:firstInLine, count:i-firstInLine});
+				firstInLine = -1;
+			}
+		}
+	}
+	if (firstInLine >-1) {
+		tokenList.push({first:firstInLine, count:i-firstInLine});
+	}
+	// reorder the token block list, largest to smallest
+	tokenList.sort(function(a,b) {return b.count-a.count; });
+	
+	
+	// Then, flatten the dependency graph into a line. The new compression order starts
+	// with the strings that are not used within another strings (usually the longer ones)
+	// and ends by the strings not depending on others. The reason for that is that the
+	// unpacking is performed LIFO and must begin by independent strings for RegExp-related reasons
+	// (match is done on any token in the RegExp, meaning that the first instance must be
+	// the separator, not another token that would be included in the string)
+
+	// Pack again by replacing the strings by the tokens, in the new compression order
+	// In case there are two or more candidates (not used by other strings), the same
+	// compression scoring is used as in the first stage.
+	var tokenLine = 0;
+	var tokenIndex = 0;
+	var tokenString = "";
+	var regPackOutput = input;
+	for (var i=0;i<matchesLookup.length;++i) {
+		var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
+		for (var j=0; j<matchesLookup.length;++j) {
+			if (matchesLookup[j].usedBy=="" && !matchesLookup[j].cleared) {
+				var count=0;
+				for (var index=regPackOutput.indexOf(matchesLookup[j].originalString, 0); index>-1; ++count) {
+					index=regPackOutput.indexOf(matchesLookup[j].originalString, index+1);
+				}
+				var gain = count*matchesLookup[j].len-count-matchesLookup[j].len-2;
+				var score = gainFactor*gain+lengthFactor*matchesLookup[j].len+copiesFactor*count;
+				if (gain>=0) {
+					if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(tiebreakerFactor*count>tiebreakerFactor*bestCount))) // R>N JsCrush, R<N First Crush
+						bestGain=gain,bestCount=count,matchIndex=j,bestScore=score,bestLength=matchesLookup[j].len;
+				} else {
+					// found a negative. The matching string may no longer be packed (if anything, match count will decrease, not increase)
+					// so we clear it (ie remove it from the dependency chain). This in turns allows strings it uses to be packed,
+					// otherwise their "usedBy" field would contain the negative and they could never be packed
+					// clearing a negative introduces a bias, since some strings that were in order before it could have been
+					// considered for compression, but they were not because they were "usedBy" the negative.
+					// The comparison is invalid : do not compress for this iteration of i 
+					clear(j);
+					negativeCleared = true;
+				}
+			}
+		}
+		if (!negativeCleared) {	// skip the compression step if we had a negative
+			if (matchIndex>-1) {	// a string was chosen, replace it with the next token
+				var matchedString = matchesLookup[matchIndex].originalString;
+				
+				// define the replacement token
+				if (++tokenIndex > tokenList[tokenLine].count) {
+					tokenString+=String.fromCharCode(tokenList[tokenLine].first);
+					if (tokenList[tokenLine].count>2) {
+						tokenString+="-";
+					}
+					if (tokenList[tokenLine].count>1) {
+						tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenList[tokenLine].count-1);
+					}
+					++tokenLine;
+					tokenIndex=1;
+				}
+				// skip CR and LF characters
+				if (tokenList[tokenLine].first==1 && (tokenIndex==10 || tokenIndex==13)) {
+					++tokenIndex;
+				}
+				var token = String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
+
+				details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
+				regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
+				
+				// remove dependencies on chosen string/token
+				clear(matchIndex);
+			
+			} else {	// remaining strings, but no gain : skip them and end the loop
+				for (var j=0; j<matchesLookup.length;++j) {
+					if (!matchesLookup[j].cleared) {
+						details += "skipped str = "+matchesLookup[j].originalString+"\n";
+					}
+				}
+				i=matchesLookup.length;
+			}
+		}
+	}
+	
+	// add the last token to the list / toke, string
+	tokenString+=String.fromCharCode(tokenList[tokenLine].first);
+	if (tokenIndex>2) {
+		tokenString+="-";
+	}
+	if (tokenIndex>1) {
+		tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
+	}
+
+	// add the unpacking code to the compressed string
+	var checkedString = regPackOutput;
+	c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
+	regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
+	regPackOutput+=';g=/['+tokenString+']/.exec(_);with(_.split(g))_=join(shift()));'+environment+'eval(_)';
+	
+	var originalSize = encodeURI(input).replace(/%../g,'i').length;
+	var resultSize = encodeURI(regPackOutput).replace(/%../g,'i').length;
+	
+	details+="------------------------\nFinal check : ";
+	var regToken = new RegExp("["+tokenString+"]","");
+	for(var token="" ; token = regToken.exec(checkedString) ; ) {
+		var k = checkedString.split(token);
+		checkedString = k.join(k.shift());
+	}
+	var success = (checkedString == input);
+	details+=(success ? "passed" : "failed")+".\n";
+	
+
+	return [originalSize, resultSize, regPackOutput, details];
+}
+
+
+
+</script>
+</body>
+</html>
