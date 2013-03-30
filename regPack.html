@@ -289,7 +289,7 @@ function regPack(input, environment)
 	var checkedString = regPackOutput;
 	c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 	regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
-	regPackOutput+=';g=/['+tokenString+']/.exec(_);with(_.split(g))_=join(shift()));'+environment+'eval(_)';
+	regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift());'+environment+'eval(_)';
 	
 	var originalSize = encodeURI(input).replace(/%../g,'i').length;
 	var resultSize = encodeURI(regPackOutput).replace(/%../g,'i').length;
