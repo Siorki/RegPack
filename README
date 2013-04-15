@@ -1,10 +1,13 @@
 RegPack is an experimental packer for Javascript code.
 
-It works in two stages :
+Current version - RegPack v2 - works in three stages :
  - the first stage is pretty similar to JS Crush (by Aivo Paas) and First Crush (by Tim Down) and its output is shown in the first box
- - the second stage performs the operations needed to turn the token list into a regular expression. Its result ends up in the second box
+ - the second stage performs the operations needed to turn the token list into a regular expression made of a character class. 
+ - the third stage builds the regexp from a negated character class (starting with a hyphen ^ then listing nontoken characters)
  
 The second stage usually shave around 20 bytes, sometimes up to 30.
+The third stage way gain a few bytes from the second stage. This depends on how the characters present in the string are spread in the ASCII table.
+Second box shows the best between second and third stage.
 
 Tips for using it :
   - settings alter the choice of strings to compress. 1/0/0 is a good allrounder, although more exotic values can yield better results depending on your code.
