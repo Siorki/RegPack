@@ -1,0 +1,16 @@
+------------------------------
+v3 - February 2014
+
+Added preprocessing stage at the beginning of compression workflow.
+Preprocessing :
+ - method hashing/renaming for 2D context, WebGL context and AudioContext 
+ - variable renaming to free tokens for the crusher
+ 
+Fixed bugs :
+ - Incorrect CR/LF handling for code using characters below 10
+ - Character 127 ignored in negated char class regexp
+------------------------------
+v2 - April 2013
+
+Use of regular expressions with negated char class (listing characters not to match on).
+------------------------------
