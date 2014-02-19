@@ -1,10 +1,10 @@
 RegPack, now in its third version, is a packer intended for use on minified Javascript code.
-It is mostly suited to small size limits (1kb, up to 4kb).
+It is mostly suited to small size constraints (1kb, up to 4kb).
 
 The current version works in five stages :
- - (if enabled) 2D, WebGL and Audio contexts method shortcuts are defined and used instead of the long, original names
- - (if enabled) variables are renamed in order to reduce character footprint and free tokens for compression
- - redundancies are eliminated and replaced by tokens, as done by JS Crush (by Aivo Paas) and First Crush (by Tim Down) 
+ - (if enabled) 2D, WebGL and Audio contexts method shortcuts are defined and used instead of the long, original names.
+ - (if enabled) variables are renamed in order to reduce character footprint and free tokens for compression.
+ - redundancies are eliminated and replaced by tokens, as done by JS Crush (by Aivo Paas) and First Crush (by Tim Down).
  - the token list is turned into a regular expression consisting in a character class. 
  - the tokens are rearranged to create a negated character class (starting with a hyphen ^ then listing nontoken characters)
  
@@ -13,7 +13,7 @@ The text boxes show intermediate stage results. Best one gets a green highlight 
  - Crushed : after the third stage
  - RegPack'ed : best between fourth and fifth stage. Depends on how the characters present in the string are spread in the ASCII table.
 
-Tips for using it :
+Tips for using RegPack :
   - Toggle method hashing for any type of context you use. If the method renaming yields a longer code, RegPack will revert to the original one.
   - "Assume global .. is a context" is for environments where the canvas is declared before your code. If entering js1k, keep this on, variable is c for classic and ++, and g for webgl.
   - Variable renaming is also performed inside strings, RegPack does not infer whether they are eval()ed or not. Disable if facing issues with this. Only one-letter variables are considered, others are ignored.
