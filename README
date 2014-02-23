@@ -20,7 +20,7 @@ Tips for using RegPack :
   - Crusher settings alter the choice of strings to compress. 1/0/0 is a good allrounder, although more exotic values can yield better results depending on your code.
   - "Pack with(Math)" get rid of all "Math." references in the code and enclose the evaluation with(Math). May gain a few extra bytes, but likely to slow down the execution.
   
-Use it online at : http://siorki.github.io/RegPack.html
+Use it online at : http://siorki.github.io/regPack.html
   
 Any feedback or improvement suggestions appreciated.
 @Siorki on Twitter
