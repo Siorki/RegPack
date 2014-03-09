@@ -2,7 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>RegPack v3</title>
+	<title>RegPack v3.0.1</title>
 	<style type="text/css">
 #options {
   border:1px solid gray;
@@ -33,7 +33,7 @@ Attempt method hashing and renaming for
 </select> <i>(as in js1k shim)</i>
 <br><input type="checkbox" name="paramOReassignVars" id="paramOReassignVars" checked="checked"/> Reassign variable names to produce consecutive character blocks,
 except for variables <input type="text" value="a b c" id="paramOExcludedVars" />
-<br><br><b>RegPack v3</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
+<br><br><b>RegPack v3.0.1</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
 Score = <input type="text" size=6 value=1 id="paramFGain" />
 *gain + <input type="text" size=6 value=0 id="paramFLength" />
 *length + <input type="text" size=6 value=0 id="paramFCopies" />
@@ -70,7 +70,7 @@ function callRegPack(withMath) {
 		document.getElementById("stage"+j+"Output").value = "";
 		document.getElementById("stage"+j+"Details").value = ""	
 	}
-	var input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'').replace(/\\/g,'\\\\');
+	var input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
 	var options = {
 		withMath : withMath,
 		hash2DContext : document.getElementById("paramOHash2D").checked!="",
@@ -149,7 +149,7 @@ RegPack.prototype = {
 		this.preprocess(input, options);
 		for (var inputIndex=0; inputIndex < this.inputList.length; ++inputIndex)
 		{
-			this.input = this.inputList[inputIndex][1][1];
+			this.input = this.inputList[inputIndex][1][1].replace(/\\/g,'\\\\');
 			
 			// first stage : configurable crusher
 			var output = this.findRedundancies(options);
@@ -186,14 +186,14 @@ RegPack.prototype = {
 	 */
 	preprocess : function(input, options) {
 		this.originalInput = input;
-		this.originalLength = encodeURI(input).replace(/%../g,'i').length;
+		this.originalLength = this.getByteLength(input);
 		this.environment = '';
 		if (options.withMath) {
 			input = input.replace(/Math\./g, '');
 			this.environment = 'with(Math)';
 		}
 		
-		var inputList = [["", [input.length, input, ""]]];
+		var inputList = [["", [this.getByteLength(input), input, ""]]];
 		
 		// Hash and rename methods of the 2d canvas context
 		// and compare whether the compression was improved or not
@@ -362,7 +362,7 @@ RegPack.prototype = {
 				details += constantsInUse[index] + " -> " + constant + "\n";
 			}
 		}
-		return [output.length, output, details];
+		return [this.getByteLength(output), output, details];
 		
 	},
 	
@@ -640,9 +640,20 @@ RegPack.prototype = {
 		output+=(declarationLength==0?";":"");
 		output+=hashedCode.substr(offset+declarationLength);
 		
-		return [output.length, output, details];
+		return [this.getByteLength(output), output, details];
 	},
 
+	/**
+	 * Returns the total byte length of a string
+	 *  1 for ASCII char
+	 *  3 for Unicode (UTF-8)
+	 * Issue #5 : final size when featuing unicode characters
+	 */
+	getByteLength : function (inString)
+	{
+		return encodeURI(inString).replace(/%../g,'i').length;
+	},
+	
 	/**
 	 * Returns true if the character code is allowed in the name of a variable.
 	 * Allowed codes are 36($), 48-57(0-9), 65-90(A-Z), 95(_), 97-122(a-z)
@@ -842,9 +853,8 @@ RegPack.prototype = {
 		this.matchesLookup = [];
 		details='';
 		Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
-		var tokens='';
 		var matches = {};
-		for(S=encodeURI(s).replace(/%../g,'i').length;;tokens=c+tokens) {
+		for(var tokens='';;tokens=c+tokens) {
 			for(c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
 			if(!c)break;
 			if (tokens.length==0) {	// search all string space for possible matches
@@ -873,7 +883,7 @@ RegPack.prototype = {
 			
 			bestLength=bestValue=M=N=e=Z=0;
 			for(i in matches){
-				j=encodeURI(i).replace(/%../g,'i').length;
+				j=this.getByteLength(i);
 				R=matches[i];
 				Z=R*j-R-j-2;	// -1 used in JS Crush performs replacement with zero gain
 				value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
@@ -902,8 +912,7 @@ RegPack.prototype = {
 			
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with(_.split(g[i]))_=join(pop());'+this.environment+'eval(_)';
-		var resultSize = encodeURI(i).replace(/%../g,'i').length;;
-		return [resultSize, i, details];
+		return [this.getByteLength(i), i, details];
 	},
 
 	/**
@@ -1083,7 +1092,7 @@ RegPack.prototype = {
 		regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
 		regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
 		
-		var resultSize = encodeURI(regPackOutput).replace(/%../g,'i').length;
+		var resultSize = this.getByteLength(regPackOutput);
 		
 		details+="------------------------\nFinal check : ";
 		var regToken = new RegExp("["+tokenString+"]","");
@@ -1119,16 +1128,16 @@ RegPack.prototype = {
 		}
 		return count;
 	},
-			
-	
+
 	/**
 	 * Returns true if the character requires a backlash as a prefix in the character class of the 
 	 * RegExp to be interpreted as part of the expression
+	 * Character : \ (used to escape others)
 	 * Character : ] (would close the character class otherwise)
 	 */
 	needsEscapingInCharClass : function(ascii)
 	{
-		return ascii==93;
+		return ascii==92||ascii==93;
 	},
 	
 	/**
@@ -1144,8 +1153,29 @@ RegPack.prototype = {
 			return (this.needsEscapingInCharClass(ascii)?"\\":"")+String.fromCharCode(ascii);
 		}
 	},
-	 
-	
+
+	/**
+     * Returns the character matching the provided unicode value
+	 * as it should be displayed in a character class in a Regexp :
+	 *  -  ] needs escaping
+	 *  - characters above 256 are \u....
+	 *  - characters between 128 and 255 are \x..
+	 *  - others (even below 32) are raw
+	 */
+	printToRegexpCharClass : function(charCode)
+	{
+		var output = "";
+		if (charCode>255) {
+			output = "\\u"+(charCode<4096?"0":"")+charCode.toString(16);
+		} else if (charCode>127) {
+			output = "\\x"+charCode.toString(16);
+		} else {
+			output = (this.needsEscapingInCharClass(charCode)?"\\":"")+String.fromCharCode(charCode);
+		}
+		return output;
+	},
+
+
 	/**
 	 * Third stage : build the shortest negated character class regular expression
 	 * (a char class beginning with a ^, such as [^A-D] which comprises everything but characters A, B, C and D)
@@ -1185,6 +1215,17 @@ RegPack.prototype = {
 			usedCharacters.push({first:firstInLine, last:i-1, size:Math.min(i-firstInLine,3)});
 		}
 		
+		// Issue #2 : unicode characters handling
+		var inputContainsUnicode = false;
+		for (i=0;i<this.input.length&&!inputContainsUnicode;++i) {
+			inputContainsUnicode = inputContainsUnicode || (this.input.charCodeAt(i)>127);
+		}
+		if (inputContainsUnicode) {
+			// non-ASCII as a whole block. Those characters are not allowed as tokens,
+			// and the block can be merged later to save bytes
+			usedCharacters.push({first:128, last:65535, size:3});
+		}
+		
 		details = availableCharactersCount + " available tokens, "+this.tokenCount+" needed.\n"
 		for (i in usedCharacters)
 		{
@@ -1217,12 +1258,12 @@ RegPack.prototype = {
 				var nextBlock = usedCharacters[i+1];
 				var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1);
 				var gain = currentBlock.size+nextBlock.size-3;
-				// extra gain if we include in a block an escaped character
+				// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
 				if (currentBlock.first != currentBlock.last) {
-					gain+=(this.needsEscapingInCharClass(currentBlock.last)?1:0);
+					gain+=this.printToRegexpCharClass(currentBlock.last).length-1;
 				}
 				if (nextBlock.first != nextBlock.last) {
-					gain+=(this.needsEscapingInCharClass(nextBlock.first)?1:0);
+					gain+=this.printToRegexpCharClass(nextBlock.first).length-1;
 				}
 				// we cannot use the ratio gain/cost as cost may be 0, if the interval is only made of one forbidden character
 				if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
@@ -1269,9 +1310,9 @@ RegPack.prototype = {
 			for (i in usedCharacters)
 			{
 				j=usedCharacters[i];
-				currentCharClass+=(this.needsEscapingInCharClass(j.first)?"\\":"")+String.fromCharCode(j.first);
+				currentCharClass+=this.printToRegexpCharClass(j.first);
 				if (j.size>2) currentCharClass+='-';
-				if (j.size>1) currentCharClass+=(this.needsEscapingInCharClass(j.last)?"\\":"")+String.fromCharCode(j.last);
+				if (j.size>1) currentCharClass+=this.printToRegexpCharClass(j.last);
 			}
 			details +=currentCharClass+"\n";
 			// keep the shortest RegExp - this may not be the last one if going through a negative gain streak
@@ -1281,7 +1322,7 @@ RegPack.prototype = {
 		}
 		
 		regExpString = "^"+regExpString;		
-		usedCharacters.push({first:128, last:128});	// upper boundary for the loop, increase to use multibyte characters
+		usedCharacters.push({first:128, last:128});	// upper boundary for the loop, increase to use multibyte characters as tokens
 		var tokenString = "";
 		var charIndex = 1;
 		for (var i=0;i<usedCharacters.length;++i)
@@ -1315,7 +1356,7 @@ RegPack.prototype = {
 		thirdStageOutput='for(_='+B+thirdStageOutput.replace(c,'\\'+B)+B;
 		thirdStageOutput+=';g=/['+regExpString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
 		
-		var resultSize = encodeURI(thirdStageOutput).replace(/%../g,'i').length;
+		var resultSize = this.getByteLength(thirdStageOutput);
 		
 		details+="------------------------\nFinal check : ";
 		var regToken = new RegExp("["+regExpString+"]","");

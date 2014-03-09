@@ -1,3 +1,9 @@
+v3.0.1 - March 2014
+
+Fixed bugs
+ - #2 : support for Unicode characters in regular expression
+ - #4 : original size showed without added escapes
+ - #5 : correct size in bytes after preprocessing stage
 ------------------------------
 v3 - February 2014
 
