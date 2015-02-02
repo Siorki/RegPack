@@ -26,7 +26,7 @@
 Attempt method hashing and renaming for
 <input type="checkbox" name="paramOHash2D" id="paramOHash2D" checked="checked"/>2D canvas context
 <input type="checkbox" name="paramOHashWebGL" id="paramOHashWebGL" checked="checked"/>WebGL canvas context
-<input type="checkbox" name="paramOHashAudio" id="paramOHashAudio"  checked="checked"/>AudioContext
+<input type="checkbox" name="paramOHashAudio" id="paramOHashAudio" checked="checked"/>AudioContext
 <br><input type="checkbox" name="paramOGlobalDefined" id="paramOGlobalDefined" checked="checked"/> Assume global variable <input type="text" size=6 value="c" id="paramOGlobalVariable" /> is a <select id="paramOGlobalType">
 <option value=0 selected>2D canvas context</option>
 <option value=1>WebGL canvas context</option>
@@ -1388,8 +1388,15 @@ RegPack.prototype = {
 (function() {
 	
 	packer = new RegPack();
+	
+	// Fix for issue #12 : disable AudioContext hashing if the browser does not support it
+	if (typeof AudioContext == "undefined")
+	{
+		hashAudioCheckbox = document.getElementById("paramOHashAudio");
+		hashAudioCheckbox.checked = false;
+		hashAudioCheckbox.disabled = true;
+	}
 
- 
 })();
 
 

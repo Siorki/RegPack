@@ -3,6 +3,7 @@ v3.0.2 - February 2015
 Fixed bugs
  - #9 : Canvas hashing can overwrite the "protected" variables
  - #11 : Different results between FF and other browsers, method array.fill() interferes with algorithm
+ - #12 : Disable AudioContext hashing option if the browser does not support the WebAudio API
 
 ------------------------------
 v3.0.1 - March 2014
