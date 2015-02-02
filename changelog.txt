@@ -1,3 +1,10 @@
+v3.0.2 - February 2015
+
+Fixed bugs
+ - #9 : Canvas hashing can overwrite the "protected" variables
+ - #11 : Different results between FF and other browsers, method array.fill() interferes with algorithm
+
+------------------------------
 v3.0.1 - March 2014
 
 Fixed bugs

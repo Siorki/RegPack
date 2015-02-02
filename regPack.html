@@ -549,16 +549,18 @@ RegPack.prototype = {
 					reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 				}
 				for (w in reverseLookup) {
-					forwardLookup[reverseLookup[w]]=w;
+					forwardLookup[reverseLookup[w]]=w;	// keep only the method names with no collisions
 				}
 				var score = 0;
 				for (var index=0; index<methodsInUse.length; ++index) {
-					if (forwardLookup[methodsInUse[index]]) {
+					// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
+					// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
+					if (typeof(forwardLookup[methodsInUse[index]])=="string") {
 						score += methodsInUse[index].length - forwardLookup[methodsInUse[index]].length;
 					}
 				}
-				score-=hashFunctions[functionIndex][0].length;
-				
+				score-=hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
+								
 				if (score>bestScore) {
 					bestScore = score;
 					bestIndex = functionIndex;
