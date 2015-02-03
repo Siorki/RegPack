@@ -2,7 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
-	<title>RegPack v3.0.1</title>
+	<title>RegPack v3.0.2</title>
 	<style type="text/css">
 #options {
   border:1px solid gray;
@@ -33,7 +33,7 @@ Attempt method hashing and renaming for
 </select> <i>(as in js1k shim)</i>
 <br><input type="checkbox" name="paramOReassignVars" id="paramOReassignVars" checked="checked"/> Reassign variable names to produce consecutive character blocks,
 except for variables <input type="text" value="a b c" id="paramOExcludedVars" />
-<br><br><b>RegPack v3.0.1</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
+<br><br><b>RegPack v3.0.2</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
 Score = <input type="text" size=6 value=1 id="paramFGain" />
 *gain + <input type="text" size=6 value=0 id="paramFLength" />
 *length + <input type="text" size=6 value=0 id="paramFCopies" />
@@ -581,7 +581,8 @@ RegPack.prototype = {
 		var hashedCode = input;
 		details += "Renamed methods for "+objectName+"\n";
 		for (var index=0; index<methodsInUse.length; ++index) {
-			if (methodsInUse[index] in forwardLookup) {
+			// Fix for issue #11, needed in this iteration again
+			if (typeof(forwardLookup[methodsInUse[index]])=="string") {
 				// replace all instances of that method in one call.
 				// The opening bracket at the end avoids triggering on a subset of the name,
 				// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
