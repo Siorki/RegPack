@@ -1308,14 +1308,7 @@ RegPack.prototype = {
 
 };
 
-
-/**
- * Initialization function, called immediately on page load
- */
-(function() {
-	
-	packer = new RegPack();
-})();
+var packer = new RegPack();
 
 if (typeof require !== 'undefined') {
     // Node
@@ -1323,6 +1316,7 @@ if (typeof require !== 'undefined') {
         console.log(module);
         module.exports = {
             RegPack: RegPack,
+            packer: packer,
             cmdRegPack: cmdRegPack,
             runPacker: runPacker
         };

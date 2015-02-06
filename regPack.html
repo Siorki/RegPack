@@ -59,8 +59,6 @@ Tiebreaker = <select id="paramFTiebreaker">
 <script src="regPack.js"></script>
 <script>
 
-var packer;
-
 function doRegPack(withMath) {
 	
 	for (var j=0; j<3; ++j) {
@@ -125,11 +123,6 @@ document.getElementById("mathPackAction").onclick=function()
 {
 	doRegPack(true);
 }
-
-/**
- * Initialization, called immediately on page load
- */
-packer = new RegPack();
 
 // Fix for issue #12 : disable AudioContext hashing if the browser does not support it
 if (typeof AudioContext === "undefined")
