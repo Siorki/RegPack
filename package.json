@@ -1,0 +1,9 @@
+{
+    "name": "RegPack",
+    "version": "3.0.2",
+    "description": "A packer intended for use on minified Javascript code",
+    "homepage": "https://github.com/Siorki/RegPack",
+    "dependencies": {
+        "minimist": "1.1.0"
+    }
+}

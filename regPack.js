@@ -1,0 +1,1328 @@
+// Derived from: https://github.com/Siorki/RegPack/ commit 58ffcdaa879f1
+
+function resultMessage(sourceSize, resultSize)
+{
+	return sourceSize+'B to '+resultSize+'B ('+(resultSize-sourceSize)+'B, '+(((resultSize-sourceSize)/sourceSize*1e4|0)/100)+'%)'
+}
+
+
+function cmdRegPack(input, options) {
+	
+	packer.runPacker(input, options);
+	var methodCount = packer.inputList.length;
+	
+	var bestMethod=0, bestCompression=1e8;
+	for (var i=0; i<methodCount; ++i) {
+		for (var j=0; j<4; ++j) {
+			if (packer.inputList[i][j+1][0] < bestCompression) {
+				bestCompression = packer.inputList[i][j+1][0];
+				bestMethod = i;
+			} 
+		}
+	}
+
+        var bestVal = "";
+        var mes = "";
+	for (var j=0; j<3; ++j) {
+		var stage = j<2 ? j+1 : (packer.inputList[bestMethod][3][0]< packer.inputList[bestMethod][4][0] ? 3 : 4);
+                if( bestCompression==packer.inputList[bestMethod][stage][0] ) {
+                        bestVal =  packer.inputList[bestMethod][stage][1];
+                        mes = resultMessage(packer.originalLength, packer.inputList[bestMethod][stage][0]);
+                }
+	}
+        //console.log("packer:", packer.inputList[bestMethod]);
+        console.warn("stats:", mes);
+        return bestVal;
+}
+
+
+function RegPack() {
+	this.matchesLookup = [];
+	this.originalInput='';
+	this.input='';
+	this.originalLength=0;
+	this.modifier = '';
+}
+
+
+RegPack.prototype = {
+
+	
+	/**
+	 * Main entry point for RegPack
+	 */
+	runPacker : function(input, options) {
+                var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
+                var default_options = {
+                        withMath : false,
+                        hash2DContext : false,
+                        hashWebGLContext : false,
+                        hashAudioContext : false,
+                        contextVariableName : true,
+                        contextType : parseInt(0),
+                        reassignVars : true,
+                        varsNotReassigned : ['a', 'b', 'c'],
+                        crushGainFactor : parseFloat(2),
+                        crushLengthFactor : parseFloat(1),
+                        crushCopiesFactor : parseFloat(0),
+                        crushTiebreakerFactor : parseInt(1)
+                };
+                for (var opt in default_options) {
+                    if (!(opt in options)) {
+                        options[opt] = default_options[opt];
+                    }
+                }
+		this.preprocess(input, options);
+		for (var inputIndex=0; inputIndex < this.inputList.length; ++inputIndex)
+		{
+			this.input = this.inputList[inputIndex][1][1].replace(/\\/g,'\\\\');
+			
+			// first stage : configurable crusher
+			var output = this.findRedundancies(options);
+			this.inputList[inputIndex].push(output);
+			
+			// second stage : convert token string to regexp
+			output = packer.packToRegexpCharClass(options);
+			this.inputList[inputIndex].push(output);
+			
+			// third stage : try a negated regexp instead
+			output = packer.packToNegatedRegexpCharClass();
+			this.inputList[inputIndex].push(output);
+			
+		}
+	},
+
+	/**
+	 * Preparation stage : attempt to rehash the methods from canvas context
+	 * Produces a pair of hashed/not hashed strings for each option
+	 * so each selected flag doubles the number of tests.
+	 * Creates a list with all the combinations to feed to the packer, one at a time.
+	 * "with Math()" option is applied on all entries if selected (does not create a pair)
+	 *
+	 * @param input : the string to pack
+	 * @param options : packing options, as follows
+	 *       -  withMath : true if the option "Pack with(Math)" was selected, false otherwise
+	 *       -  hash2DContext : true if the option "Hash and rename 2D canvas context" was selected, false otherwise
+	 *       -  hashWebGLContext : true if the option "Hash and rename WebGL canvas context" was selected, false otherwise
+	 *       -  hashAudioContext : true if the option "Hash and rename AudioContext" was selected, false otherwise
+	 *       -  variableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
+	 *       -  contextType : the context type (0=2D, 1=WebGL) if the "assume context" option was selected, irrelevant otherwise
+	 *       -  reassignVars : true to globally reassign variable names 
+	 *       -  varsNotReassigned : boolean array[128], true to prevent variable from being renamed
+	 */
+	preprocess : function(input, options) {
+		this.originalInput = input;
+		this.originalLength = this.getByteLength(input);
+		this.environment = '';
+		if (options.withMath) {
+			input = input.replace(/Math\./g, '');
+			this.environment = 'with(Math)';
+		}
+		
+		var inputList = [["", [this.getByteLength(input), input, ""]]];
+		
+		// Hash and rename methods of the 2d canvas context
+		// and compare whether the compression was improved or not
+		if (options.hash2DContext) {
+			var canvas = document.createElement("canvas");
+			var context = canvas.getContext("2d");
+			for (var count=inputList.length, i=0; i<count; ++i)
+			{
+				var result = this.preprocess2DContext(inputList[i][1][1], (options.contextType==0?options.contextVariableName:false), context, options.varsNotReassigned);
+				if (result) {
+					result[2]=inputList[i][1][2]+result[2];
+					inputList.push([inputList[i][0]+" 2D", result]);
+				}
+			}
+		}
+		
+		// for WebGL contexts, there are two options 
+		//   - hash and replace the method names only (as for other contexts)
+		//   - as above, plus replace the definitions of constants with their values (magic numbers)
+		if (options.hashWebGLContext) {
+			var canvas = document.createElement("canvas");
+			var context = canvas.getContext("experimental-webgl");
+			for (var count=inputList.length, i=0; i<count; ++i)
+			{
+				var result = this.preprocessWebGLContext(inputList[i][1][1], (options.contextType==1?options.contextVariableName:false), context, options.varsNotReassigned);
+				if (result) {
+					result[2]=inputList[i][1][2]+result[2];
+					inputList.push([inputList[i][0]+" WebGL", result]);
+					
+					// the second option (replace constants) is added as a separate entry, but only on top of the replacement, not alone
+					// name of variable holding context is not recomputed, and passed from the previous preprocessing instead.
+					var secondResult = this.replaceWebGLconstants(result[1], result[3], context);
+					secondResult[2]=result[2]+secondResult[2];
+					inputList.push([inputList[i][0]+" WebGL+constants", secondResult]);
+				}
+			}
+		}
+		
+		if (options.hashAudioContext) {
+			var context = new AudioContext;
+			for (var count=inputList.length, i=0; i<count; ++i) 
+			{
+				var result = this.preprocessAudioContext(inputList[i][1][1], context, options.varsNotReassigned);
+				if (result) {
+					result[2]=inputList[i][1][2]+result[2];
+					inputList.push([inputList[i][0]+" Audio", result]);
+				}	
+			}
+		}
+		inputList[0][0]="unhashed";
+		
+		if (options.reassignVars)
+		{
+			for (var i=0; i<inputList.length; ++i) {
+				var result = this.reassignVariableNames(inputList[i][1][1], options.varsNotReassigned);
+				inputList[i][1][1] = result[0];
+				inputList[i][1][2] += result[1];
+			}
+		}
+		this.inputList = inputList;
+	},
+
+	/**
+	 * Performs an optimal hashing and renaming of the methods of a canvas 2d context.
+	 * Uses a context reference passed from a shim, or attempts to locate in inside the code.
+	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
+	 * even if the preprocessing actually lenghtened the string.
+	 *
+	 * @param input the code to preprocess
+	 * @param variableName the variable holding the context if defined outside of the input (shim), false otherwise
+	 * @param context an instance of a canvas 2d context, to list method names
+	 * @param varsNotReassigned boolean array[128], true to keep name of variable
+	 * @return the result array, or false if no 2d context definition is found in the code.
+	 */
+	preprocess2DContext : function(input, variableName, context, varsNotReassigned) {
+		// Obtain the context definition (variable name and location in the code)
+		var objectName = variableName, objectOffset = 0, declarationLength = 0, contextFound = false;
+		if (variableName) {
+			// either it is provided to us
+			contextFound = true;
+		} else {
+			var result = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(['"]2d['"]\)/i);
+			if (result) {
+				contextFound = true;
+				objectName = result[1];
+				objectOffset = input.indexOf(result[0]);
+				declarationLength = result[0].length;
+			}
+		}
+			
+		if (contextFound) {
+			var preprocessedCode = this.renameObjectMethods(input, objectName, objectOffset, declarationLength, context, varsNotReassigned);
+			return preprocessedCode;
+		}
+		return false;
+	},
+
+	/**
+	 * Performs an optimal hashing and renaming of the methods of a canvas WebGL context.
+	 * Uses a context reference passed from a shim, or attempts to locate in inside the code.
+	 * Returns an array in the same format as the compression methods, plus the name of the variable containing
+	 * the context, that will be used by replaceWebGLconstants(), so it does not need to recompute it :
+	 * Array context is thus : [output length, output string, informations, variable name],
+	 * It is returned even if the preprocessing actually lenghtened the string.
+	 * Only the methods are renamed. Properties and constants are untouched.
+	 * @see replaceWebGLconstants which works on constants only
+	 *
+	 * @param input the code to preprocess
+	 * @param variableName the variable holding the context if defined outside of the input (shim), false otherwise
+	 * @param context an instance of a canvas webgl context, to list method names
+	 * @param varsNotReassigned boolean array[128], true to keep name of variable
+	 * @return the result array, or false if no webgl context definition is found in the code.
+	 */
+	preprocessWebGLContext : function(input, variableName, context, varsNotReassigned) {
+		// Obtain the context definition (variable name and location in the code)
+		var objectName = variableName, objectOffset = 0, declarationLength = 0, contextFound = false;
+		if (variableName) {
+			// either it is provided to us
+			contextFound = true;
+		} else {
+			var result = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\))*/i);
+			if (result) {
+				contextFound = true;
+				objectName = result[1];
+				objectOffset = input.indexOf(result[0]);
+				declarationLength = result[0].length;
+			} 
+		}
+		if (contextFound) {
+			
+			var preprocessedCode = this.renameObjectMethods(input, objectName, objectOffset, declarationLength, context, varsNotReassigned);
+			preprocessedCode.push(objectName);
+			return preprocessedCode;
+		}
+		return false;
+	},
+	
+	/**
+	 * Replaces, in the provided code, all definition of WebGL constants with their numerical values
+	 * Uses a context reference passed from a shim, or attempts to locate in inside the code.
+	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
+	 * even if the replacement actually lenghtened the string.
+	 * Only the constant values in CAPITALS are replaced. Other properties and methods are untouched.
+	 *
+	 * @param input the code to perform replacement on
+	 * @param objectName the variable holding the context (mandatory)
+	 * @param context an instance of a canvas webgl context, to check for exiting properties and obtain their values
+	 * @return the result array, or false if no webgl context definition is found in the code.
+	 */
+	replaceWebGLconstants : function (input, objectName, context)
+	{
+		var exp = new RegExp(objectName+"\\.([0-9A-Z_]*)[^\\w\\d_(]","g");
+		var constantsInUse=[];
+		var result=exp.exec(input);
+		while (result) {	// get a set with a unique entry for each method
+			if (constantsInUse.indexOf(result[1])==-1) {
+				constantsInUse.push(result[1]);
+			}
+			result=exp.exec(input);
+		}
+		var output = input, details="";
+		details += "Replaced constants of "+objectName+"\n";
+		for (var index=0; index<constantsInUse.length; ++index) {
+			if (constantsInUse[index] in context) {
+				var constant = context[constantsInUse[index]];
+				output = output.split(objectName+"."+constantsInUse[index]).join(constant);
+				// show the renaming in the details
+				details += constantsInUse[index] + " -> " + constant + "\n";
+			}
+		}
+		return [this.getByteLength(output), output, details];
+		
+	},
+	
+	/**
+	 * Performs an optimal hashing and renaming of the methods of an AudioContext.
+	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
+	 * even if the preprocessing actually lenghtened the string.
+	 *
+	 * @param input the code to preprocess
+	 * @param context an instance of an AudioContext, to list method names
+	 * @param varsNotReassigned boolean array[128], true to keep name of variable
+	 * @return the result array, or false if no AudioContext definition is found in the code.
+	 */
+
+	preprocessAudioContext : function(input, context) {
+		// Initialization of a *AudioContext can be performed in a variety of ways
+		// and is usually less consistent that a 2D or WebGL graphic context.
+		// Multiple tests cover the most common cases
+		var objectOffset = 0;
+		var replacementOffset = 0;
+		var objectName = "";
+		var details = "";
+		// direct instanciation of an AudioContext
+		// var c = new AudioContext()
+		var result = input.match (/([\w\.]*)\s*=\s*new AudioContext/i);
+		if (result) {
+			objectOffset = input.indexOf(result[0]);
+			objectName = result[1];
+			// start replacement at the next semicolon
+			replacementOffset = 1+input.indexOf(";", objectOffset);
+			// unless the object is used before
+			replacementOffset = Math.min(replacementOffset, input.indexOf(objectName, objectOffset+result[0].length));
+		}
+		// direct instanciation of a webkitAudioContext
+		// beware, the same code could try to create both (see TestCase audioContext_create1)
+		// var c = new webkitAudioContext()
+		var resultWebkit = input.match (/([\w\.]*)\s*=\s*new webkitAudioContext/i);
+		if (resultWebkit) {
+			
+			if (resultWebkit[1] == objectName || objectName == "") {
+				// we take the latter declaration, as to add the renaming loop after both of them
+				objectOffset = Math.max(objectOffset, input.indexOf(resultWebkit[0]));
+				// start replacement at the next semicolon
+				replacementOffset = 1+input.indexOf(";", objectOffset);
+				// unless the object is used before
+				replacementOffset = Math.min(replacementOffset, input.indexOf(objectName, objectOffset+resultWebkit[0].length));
+			} else {
+				// the webkitAudioContext was created with a different name than the AudioContext
+				// in this case, we separately rename objects for both of them 
+				// (see TestCase audioContext_create2 and audioContext_create3)
+				var webkitObjectOffset = input.indexOf(resultWebkit[0]);
+				var webkitObjectName = resultWebkit[1];
+				// start replacement at the next semicolon
+				var webkitReplacementOffset = 1+input.indexOf(";", webkitObjectOffset);
+				// unless the object is used before
+				webkitReplacementOffset = Math.min(webkitReplacementOffset, input.indexOf(webkitObjectName, webkitObjectOffset+resultWebkit[0].length));
+
+				
+				var secondObjectOffset = replacementOffset>webkitReplacementOffset ? objectOffset : webkitObjectOffset;
+				var secondReplacementOffset = replacementOffset>webkitReplacementOffset ? replacementOffset : webkitReplacementOffset;
+				var secondObjectName = replacementOffset>webkitReplacementOffset ? objectName : resultWebkit[1];
+				
+				objectOffset = replacementOffset>webkitReplacementOffset ? webkitObjectOffset : objectOffset ;
+				replacementOffset = replacementOffset>webkitReplacementOffset ? webkitReplacementOffset : replacementOffset ;
+				objectName = replacementOffset>webkitReplacementOffset ? resultWebkit[1] : objectName ;
+				
+				// perform the replacement for the latter object first, so the offset of the former is not changed
+				var halfReplaced =this.renameObjectMethods(input, secondObjectName, secondReplacementOffset, 0, context);
+				input = halfReplaced[1];
+				details = halfReplaced[2];
+			}
+		}
+		// direct instanciation of the appropriate context
+		// var c = new (window.AudioContext||window.webkitAudioContext)()
+		result = input.match (/([\w\.]*)\s*=\s*new\s*\(*\s*(window\.)*(webkit)*AudioContext\s*\|\|\s*(window\.)*(webkit)*AudioContext/i);
+		if (result) {
+			objectOffset = input.indexOf(result[0]);
+			objectName = result[1];
+			// start replacement at the next semicolon
+			replacementOffset = 1+input.indexOf(";", objectOffset);
+			// unless the object is used before
+			replacementOffset = Math.min(replacementOffset, input.indexOf(objectName, objectOffset+result[0].length));
+		}
+		
+		// direct instanciation of the appropriate context, not factored in
+		// var c = new AudioContext()||new webkitAudioContext()
+		// (see TestCase audioContext_create4)
+		result = input.match (/([\w\.]*)\s*=\s*new\s*\(*\s*(window\.)*(webkit)*AudioContext(\(\))*\s*\|\|\s*new\s*(window\.)*(webkit)*AudioContext(\(\))*/i);
+		if (result) {
+			objectOffset = input.indexOf(result[0]);
+			objectName = result[1];
+			// start replacement at the next semicolon
+			replacementOffset = 1+input.indexOf(";", objectOffset);
+			// unless the object is used before
+			replacementOffset = Math.min(replacementOffset, input.indexOf(objectName, objectOffset+result[0].length));
+		}
+		
+		// instanciation of the appropriate context, through a temporary variable
+		// contextType = window.AudioContext||window.webkitAudioContext; var c = new contextType;
+		result = input.match (/([\w\.]*)\s*=\s*\(*\s*(window\.)*(webkit)*AudioContext\s*\|\|\s*(window\.)*(webkit)*AudioContext/i);
+		if (result) {
+			var contextTypeName = result[1];
+			var exp = new RegExp("([\\w\\.]*)\\s*=\\s*new\\s*\\(*\\s*"+contextTypeName);
+			result = input.match(exp);
+			if (result) {
+				objectOffset = input.indexOf(result[0]);
+				objectName = result[1];
+				// start replacement at the next semicolon
+				replacementOffset = 1+input.indexOf(";", objectOffset);
+				// unless the object is used before
+				replacementOffset = Math.min(replacementOffset, input.indexOf(objectName, objectOffset+result[0].length));
+			}
+		}
+		
+		if (replacementOffset>0) {
+			var preprocessedCode = this.renameObjectMethods(input, objectName, replacementOffset, 0, context, varsNotReassigned);
+			preprocessedCode[2] = details + preprocessedCode[2];
+			return preprocessedCode;
+		}
+		return false;
+	},
+	
+
+	
+	/**
+	 * Identifies the optimal hashing function (the one returning the shortest result)
+	 * then renames all the methods with their respective hash, and preprends the hashing code.
+	 *
+	 * Replacement is only performed from the definition of the object (graphic or audio context) on, 
+	 * hence the offset parameter
+	 *
+ 	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
+	 *
+	 * @param input : the string to pack
+	 * @param objectName : the name of the variable holding the object (context) whose methods to rename in the source string
+	 * @param offset : character offset to the beginning of the object declaration. Zero if defined outside (shim)
+	 * @param declarationLength : length of the object declaration, starting at offset. Zero if defined outside (shim)
+	 * @param reference : an instance of an object of the same type (2D context, WebGL context, ..) to extract method names
+	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
+	 */
+	renameObjectMethods : function(input, objectName, offset, declarationLength, reference, varsNotReassigned)
+	{
+		// these are the hashing functions that will be tested
+		var hashFunctions = [
+			["w[0]", 1, function(w,y) { 
+				return w[0]; 
+				} ],
+			["w[0]+w[y]", 3, function(w,y) { return w[0]+w[y]; } ],
+			["w[0]+w.length", 1, function(w,y) { return w[0]+w.length; } ],
+			["w[0]+w[w.length-1]", 3, function(w,y) { return w[0]+w[w.length-1]; } ],
+			["w[0]+(w[y]||'')", 20, function(w,y) { return w[0]+(w[y]||''); } ],
+			["w[0]+[w[y]]", 20, function(w,y) { return w[0]+[w[y]]; } ],
+			["w[0]+w[1]+(w[y]||'')", 20, function(w,y) { return w[0]+w[1]+(w[y]||''); } ],
+			["w[0]+w[1]+[w[y]]", 20, function(w,y) { return w[0]+w[1]+[w[y]]; } ]
+							];
+				
+		var details = '';
+		var exp = new RegExp(objectName+"\\.(\\w*)\\(","g");
+		var methodsInUse=[];
+		var result=exp.exec(input);
+		while (result) {	// get a set with a unique entry for each method
+			if (methodsInUse.indexOf(result[1])==-1) {
+				methodsInUse.push(result[1]);
+			}
+			result=exp.exec(input);
+		}
+		
+		var bestScore = -999, bestIndex =-1, bestYValue = 0;
+		// For each hashing function, we compute the hashed names of all methods of the object (canvas or other)
+		// All collisions (such as taking the first letter of scale() and save() end up in s()) are eliminated
+		// as the order depends on the browser and we cannot assume the browser that will be running the final code
+		// A score is then assigned to the hashing function by 
+		//   - adding the gain obtained by shortening the non-colliding method names to their hash
+		//     (the number of occurrences is irrelevant, we assume that the compression step will amount them to one)
+		//   - subtracting the length of the hashing function
+		// Only the hashing function with the best score is kept - and applied
+		for (var functionIndex=0; functionIndex<hashFunctions.length; ++functionIndex) {
+			for (var yValue=1; yValue<=hashFunctions[functionIndex][1] ; ++yValue) {
+				var reverseLookup = [], forwardLookup = [];
+				for (w in reference) {	
+					var hashedName = hashFunctions[functionIndex][2].call(null, w, yValue);
+					reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
+				}
+				for (w in reverseLookup) {
+					forwardLookup[reverseLookup[w]]=w;	// keep only the method names with no collisions
+				}
+				var score = 0;
+				for (var index=0; index<methodsInUse.length; ++index) {
+					// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
+					// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
+					if (typeof(forwardLookup[methodsInUse[index]])=="string") {
+						score += methodsInUse[index].length - forwardLookup[methodsInUse[index]].length;
+					}
+				}
+				score-=hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
+								
+				if (score>bestScore) {
+					bestScore = score;
+					bestIndex = functionIndex;
+					bestYValue = yValue;
+				}
+			}
+		}
+		
+		// best hash function (based on byte gain) found. Apply it
+		var reverseLookup = [], forwardLookup = [];
+		for (w in reference) {	
+			var hashedName = hashFunctions[bestIndex][2].call(null, w, bestYValue);
+			reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
+		}
+		for (w in reverseLookup) {
+			forwardLookup[reverseLookup[w]]=w;
+		}
+		var hashedCode = input;
+		details += "Renamed methods for "+objectName+"\n";
+		for (var index=0; index<methodsInUse.length; ++index) {
+			// Fix for issue #11, needed in this iteration again
+			if (typeof(forwardLookup[methodsInUse[index]])=="string") {
+				// replace all instances of that method in one call.
+				// The opening bracket at the end avoids triggering on a subset of the name,
+				// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
+				hashedCode = hashedCode.split(objectName+"."+methodsInUse[index]+"(").join(objectName+"."+forwardLookup[methodsInUse[index]]+"(");
+				// show the renaming in the details, for used methods only
+				details += forwardLookup[methodsInUse[index]] + " -> " + methodsInUse[index] + "\n";
+			}
+		}
+		details += "\n";
+		
+		// Choose the index variable for the added hashing code
+		// The algorithm counts every instance of "for(*" with individual letters replacing the star
+		// then chooses the letter with the most matches, in order to benefit most from compression
+		details+='Loop variables :\n';
+		var indexMatches = new Array(128) ;
+		var loopIndexRegExp = /for\((\w)/g;
+		var loopIndexResult=loopIndexRegExp.exec(input);
+		while (loopIndexResult) {	// get a set with a unique entry for each method
+			var code = loopIndexResult[1].charCodeAt(0);
+			if (!varsNotReassigned[code]) {
+				indexMatches[code] = (indexMatches[code]||0)+1;
+			}
+			loopIndexResult=loopIndexRegExp.exec(input);
+		}
+		var indexName="i"; // default name
+		var maxMatches = 0;
+		for (var i=0; i<128; ++i) {
+			if (indexMatches[i]>maxMatches) {
+				maxMatches = indexMatches[i];
+				indexName = String.fromCharCode(i);
+			}
+		}
+		for (var i=0; i<128; ++i) {
+			if (indexMatches[i]) {
+				details += String.fromCharCode(i)+" *"+indexMatches[i]+(indexName == String.fromCharCode(i)?" <-- selected":"")+"\n";
+			}
+		}
+		details += "\n";
+		
+		var output = hashedCode.substr(0, offset);
+
+		// Create the final hashing expression by replacing the placeholder variables
+		var expression = hashFunctions[bestIndex][0].replace(/w/g, indexName);
+		expression = expression.replace(/y/g, bestYValue);		
+		// If the input code uses mostly "" as string delimiters, use it as well in the expression instead of ''
+		if (input.split('"').length>input.split("'").length) {
+			expression = expression.replace(/'/g, '"');
+		}
+		
+		// Insert the hashing/renaming loop in the code.
+		// If the context definition is not included (js1k shim for instance), the loop is prepended to the code and ends with ";"
+		// otherwise the loop replaces and includes the declaration. The code looks like :
+		//   for (i in a=c.getContext('2d'))a[...]=a[i]
+		// The ending separator is kept, unless it is a comma ",", in which case it is replaced with a semicolon ";"
+		// (to avoid including the trailing code in the loop)
+		output+="for("+indexName+" in "+(declarationLength==0?objectName:hashedCode.substr(offset, declarationLength))+")";
+		output+=objectName+"["+expression+"]="+objectName+"["+indexName+"]";
+		var k=hashedCode[offset+declarationLength];
+		if (hashedCode[offset+declarationLength]==",") {
+			// replace the trailing "," with ";" as explained above
+			output+=";";
+			++declarationLength;
+		}
+		output+=(declarationLength==0?";":"");
+		output+=hashedCode.substr(offset+declarationLength);
+		
+		return [this.getByteLength(output), output, details];
+	},
+
+	/**
+	 * Returns the total byte length of a string
+	 *  1 for ASCII char
+	 *  3 for Unicode (UTF-8)
+	 * Issue #5 : final size when featuing unicode characters
+	 */
+	getByteLength : function (inString)
+	{
+		return encodeURI(inString).replace(/%../g,'i').length;
+	},
+	
+	/**
+	 * Returns true if the character code is allowed in the name of a variable.
+	 * Allowed codes are 36($), 48-57(0-9), 65-90(A-Z), 95(_), 97-122(a-z)
+	 */
+	isCharAllowedInVariable : function (charCode)
+	{
+		return (charCode>64 && charCode<91) || (charCode>96 && charCode<123) 
+			   || (charCode>47 && charCode<58)
+			   || charCode==36 || charCode==95;
+	},
+
+	/**
+	 * Returns true if the character code is a digit
+	 */
+	isDigit : function (charCode)
+	{
+		return (charCode>47 && charCode<58);
+	},
+	
+	/**
+	 * Renames one-letter variables in the code, in order to group characters in consecutive blocks as much as possible.
+	 * This will leave larger empty blocks for tokens, so that the character class that represents them
+	 * in the final regular expression will be shorter : a block is represented by three characters (begin,
+	 * dash, end), no matter now many are comprised in between.
+	 * This operation does not change the length of the code nor its inner workings.
+	 *
+	 * The method :
+	 * - lists all the one-letter variables in the code
+	 * - identifies those using a character that is not otherwise present in classes or keywords
+	 *   (meaning that renaming them will actually free the character to use as a token)
+	 * - identifies all the characters in use by classes or language keywords
+	 * - reassign those to variables, if available (not used by other variables)
+	 * - if there are remaining variables in need of a name, fill gaps in the ASCII table, starting with the shortest ones.
+	 *   (for instance, if a,c,d,e,g,h are in use, it will assign b and f, since [a-h] is shorter than [ac-egh]
+	 *
+	 * @param input string containing the code to process
+	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
+	 * @return array [code with reassigned variable names, informations]
+	 */
+	reassignVariableNames : function (input, varsNotReassigned)
+	{
+		var variableChars = [];
+		var keywordChars = [];
+		var previousChar = 0;
+		var letterCount = 0;
+		var isKeyword = false;
+		for (var i=0; i<128; ++i) {
+			variableChars[i] = keywordChars[i] = false;
+		}
+		// Identify characters used in the code :
+		//  - those used only in keywords, method names.
+		//  - those used as one-letter variable or function names only (and candidates to renaming)
+		//  - those used for both variable names and within keywords
+				
+		for (var i=0; i<input.length; ++i) {
+			var currentChar = input.charCodeAt(i);
+			if (currentChar<128) {
+				if (this.isCharAllowedInVariable(currentChar)) {
+					++letterCount;
+					if (letterCount>1) {
+						isKeyword=true;
+						keywordChars[previousChar]=true;
+						keywordChars[currentChar]=true;
+					} else {
+						if (previousChar == 46) { // character .
+							isKeyword=true;
+							keywordChars[currentChar]=true;
+						}
+					}
+				} else {
+					// only consider one-letter variables or functions. 
+					// Do not include digits, they are not permitted as one-letter variable names.
+					// Do not include in variables if preceded by a dot, which would indicate member variable or function
+					if (letterCount==1 && !this.isDigit(previousChar) && !isKeyword) {
+						variableChars[previousChar]=true;
+					}
+					letterCount=0;
+					isKeyword=false;
+				}
+				previousChar=currentChar;
+			}
+		}
+
+		var details = "all variables : ";
+		for (var i=32; i<128; ++i) {
+			if (variableChars[i]) {
+				details+=String.fromCharCode(i);
+			}
+		}
+		details +="\n";
+		
+		var availableCharList = "";
+		var formerVariableCharList = "";
+		var detailsSub1 = "";
+		var detailsSub2 = "";		
+		for (var i=32; i<128; ++i) {
+			// Identify as available all characters used in keywords but not variables
+			if (keywordChars[i] && !variableChars[i] && !this.isDigit(i)) {
+				availableCharList+=String.fromCharCode(i);
+				detailsSub1+=String.fromCharCode(i);
+			}
+			// List all variables that can be reassigned a new name.
+			// This excludes those with a one-letter name already used in a keyword (no gain in renaming them)
+			// and those explicitely excluded from the process by the user.
+			if (variableChars[i] && !keywordChars[i] && !varsNotReassigned[i]) {
+				formerVariableCharList+=String.fromCharCode(i);
+				detailsSub2+=String.fromCharCode(i);
+			}
+		}
+		if (!availableCharList.length) {
+			detailsSub1 = "(none)";
+		}
+		if (!formerVariableCharList.length) {
+			detailsSub2 = "(none)";
+		}
+		details += "in keywords only : " + detailsSub1 + "\nin variables only : " + detailsSub2 + "\n\n";
+
+		// Prepare to rename variables
+		// If we have more variables to rename (characters used as variable names only)
+		// than characters available (used in keywords only, but not as variables - yet),
+		// we need to allocate more characters, among those not in use :
+		//   - either those not used at all in the code
+		//   - or those used by variables only (which means not renaming the variable by that name)
+		// 
+		// The algorithm attempts to reduce the block count (i.e. chooses characters in between two blocks, that are thus merged)
+		// so that the regular expression for tokens can be as short as possible.
+		if (availableCharList.length < formerVariableCharList.length) {
+			var lettersNeeded = formerVariableCharList.length - availableCharList.length;
+			
+			// identify blocs of unused characters
+			var unusedBlocks = [];
+			var blockStartsAt = -1;
+			for (var i=1; i<128; ++i) 
+			{
+				if (!keywordChars[i] && !varsNotReassigned[i]) {
+					// not present in code, or used for naming variables only : add to candidate characters
+					// variables not reassigned are not included in the pool (we do not want to rename another variable to that)
+					if (blockStartsAt==-1) {
+						blockStartsAt = i;
+					}
+				} else {
+					// present in code, ends block if started
+					if (blockStartsAt!=-1) {
+						unusedBlocks.push( {first:blockStartsAt, nextToLast:i});
+						blockStartsAt = -1;
+					}
+				}
+			}
+			// There will always be enough characters, since we count those we are trying to eliminate
+			// In the worst case, variables will be renamed to themselves, with no loss.
+			// Sort the blocks, shortest to longest
+			unusedBlocks.sort( function(a,b) { return (a.nextToLast-a.first)-(b.nextToLast-b.first); } );
+			detailsSub1 = "Adding letters : ";
+			detailsSub2 = "Not renaming : ";
+			var blockIndex = 0;
+			while (lettersNeeded) {
+				for (var i=unusedBlocks[blockIndex].first;  lettersNeeded>0 && i<unusedBlocks[blockIndex].nextToLast; ++i) {
+					if (this.isCharAllowedInVariable(i) && !this.isDigit(i)) {
+						var variableName = String.fromCharCode(i);
+						var indexInFormerList = formerVariableCharList.indexOf(variableName);
+						if (indexInFormerList>-1) {
+							// variable name already in use : do not rename it
+							formerVariableCharList = formerVariableCharList.substr(0,indexInFormerList)
+													+formerVariableCharList.substr(indexInFormerList+1);
+							detailsSub2+=variableName;
+						} else {
+							detailsSub1+=variableName;
+							availableCharList+=variableName;
+						}
+						--lettersNeeded;
+					}
+				}
+				++blockIndex;
+			}
+			details+=detailsSub1+"\n"+detailsSub2+"\n";
+			
+		}
+		details += formerVariableCharList.length?"Renaming variables : \n":"No variables to rename.\n";
+		var output = input;
+		for (var i=0; i<formerVariableCharList.length; ++i)
+		{
+			var oldChar = formerVariableCharList[i];
+			output = output.split(formerVariableCharList[i]).join(availableCharList[i]);
+			details += "  "+formerVariableCharList[i]+ " => "+availableCharList[i]+"\n";
+		}
+		
+		return [output, details];
+	},
+
+	/**
+	 * First stage : apply the algorithm common to First Crush and JS Crush
+	 * Store the matches along with inner details in the array matchesLookup
+	 */
+	findRedundancies : function(options) {
+
+		var s = this.input;
+		this.matchesLookup = [];
+		details='';
+		Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
+		var matches = {};
+		for(var tokens='';;tokens=c+tokens) {
+			for(c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
+			if(!c)break;
+			if (tokens.length==0) {	// search all string space for possible matches
+				var found=true;	// stop as soon as no substring of length t is found twice
+				for(var t=2;found;++t) {
+					found=false;
+					for(i=0;++i<s.length-t;)
+						if(!matches[x=s.substr(j=i,t)])
+						{
+							if(~(j=s.indexOf(x,j+t)))
+							{
+								found=true;
+								for(matches[x]=1;~j;matches[x]++)
+								{
+									j=s.indexOf(x,j+t);
+								}
+							}
+						}
+				}
+			} else {	// only recompute the values of previously found matches
+				var newMatches={};
+				for(x in matches)
+					for(j=s.indexOf(x),newMatches[x]=0;~j;newMatches[x]++)j=s.indexOf(x,j+x.length);
+				matches = newMatches;
+			}
+			
+			bestLength=bestValue=M=N=e=Z=0;
+			for(i in matches){
+				j=this.getByteLength(i);
+				R=matches[i];
+				Z=R*j-R-j-2;	// -1 used in JS Crush performs replacement with zero gain
+				value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
+				if(Z>0) {
+					if(value>bestValue||bestValue==value&&(Z>M||Z==M&&(options.crushTiebreakerFactor*R>options.crushTiebreakerFactor*N))) // R>N JsCrush, R<N First Crush
+						M=Z,N=R,e=i,bestValue=value,bestLength=j;
+				} else {
+					delete matches[i];
+				}
+			}
+			if(!e)
+				break;
+				
+			// update the other matches in case the selected one is a substring thereof
+			var newMatches={};
+			for(x in matches) {
+				newMatches[x.split(e).join(c)]=1;
+			}
+			matches = newMatches;
+			
+			// and apply the compression to the string
+			s=s.split(e).join(c)+c+e;
+			this.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
+			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
+		}
+			
+		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
+		i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with(_.split(g[i]))_=join(pop());'+this.environment+'eval(_)';
+		return [this.getByteLength(i), i, details];
+	},
+
+	/**
+	 * Clears a match from matchesLookup for dependencies
+	 */
+	 clear : function(matchIndex) {
+		var oldToken = this.matchesLookup[matchIndex].token;
+		for (var j=0;j<this.matchesLookup.length;++j) {
+			this.matchesLookup[j].usedBy = this.matchesLookup[j].usedBy.split(oldToken).join("");
+		}
+		this.matchesLookup[matchIndex].cleared=true;
+	},
+	
+	/**
+	 * Second stage : extra actions required to reduce the token string to a RegExp
+	 *
+	 * Needs and modifies the matchesLookup array
+	 */
+	packToRegexpCharClass : function(options) 
+	{
+
+		var details = '';
+		// First, re-expand the packed strings so that they no longer contain any compression token
+		// since we will be storing them in a different order.
+		// Use this step to establish a dependency graph (compressed strings containing other compressed strings)
+		for (var i=0;i<this.matchesLookup.length;++i) {
+			for (var j=0; j<this.matchesLookup.length;++j) {
+				if (this.matchesLookup[j].originalString.indexOf(this.matchesLookup[i].token)>-1) {
+					this.matchesLookup[j].originalString = this.matchesLookup[j].originalString.split(this.matchesLookup[i].token).join(this.matchesLookup[i].originalString);
+				}
+				if (i!=j && this.matchesLookup[j].originalString.indexOf(this.matchesLookup[i].originalString)>-1) {
+					this.matchesLookup[j].depends += this.matchesLookup[i].token;
+					this.matchesLookup[i].usedBy += this.matchesLookup[j].token;
+					
+				}
+			}
+		}
+		/** debug only
+		for (i=0; i<this.matchesLookup.length; ++i) {
+			c=this.matchesLookup[i];
+			details += c.token.charCodeAt(0)+"("+c.token+") str1 = "+c.string+" str2 = "+c.originalString+" depends = /"+c.depends+"/\n";
+		}
+		*/
+		
+		// Define the token list that will be used by ordering blocks, from the largest to the smallest
+		// Blocks are 4 or more contiguous characters : "ABCDE" can be shortened to "A-E" in the RegExp
+		// The gain from RegPack v1 over the original JSCrush and First Crush comes essentially from that.
+		var tokenList = [];
+		var firstInLine = -1;
+		for(i=1;i<127;++i) {
+			var token = String.fromCharCode(i);
+			if (i!=34 && i!=39 && i!=92 && this.input.indexOf(token)==-1) {
+				if (firstInLine ==-1) {
+					firstInLine = i;
+				}
+			} else {
+				if (firstInLine >-1) {
+					// do not start a block with CR nor LF, as the first character of the block
+					// needs to be written to the regexp and those are not writable (or require escaping)
+					if (firstInLine == 10 || firstInLine == 13) {
+						++firstInLine;
+					}					
+					var tokenCount = i-firstInLine;
+					// for the same reason, do not end a block with CR nor LF (watch out, the end of the block is the index before i)
+					if (i==11 || i==14) {
+						--tokenCount;
+					}
+					tokenList.push({first:firstInLine, count:tokenCount});
+					firstInLine = -1;
+				}
+			}
+		}
+		if (firstInLine >-1) {
+			tokenList.push({first:firstInLine, count:i-firstInLine});
+		}
+		// reorder the token block list, largest to smallest
+		tokenList.sort(function(a,b) {return b.count-a.count; });
+		
+		
+		// Then, flatten the dependency graph into a line. The new compression order starts
+		// with the strings that are not used within another strings (usually the longer ones)
+		// and ends by the strings not depending on others. The reason for that is that the
+		// unpacking is performed LIFO and must begin by independent strings for RegExp-related reasons
+		// (match is done on any token in the RegExp, meaning that the first instance must be
+		// the separator, not another token that would be included in the string)
+
+		// Pack again by replacing the strings by the tokens, in the new compression order
+		// In case there are two or more candidates (not used by other strings), the same
+		// compression scoring is used as in the first stage.
+		var tokenLine = 0;	// 0-based index of current token line (block)
+		var tokenIndex = 0;	// 0-based index of current token in current line
+		this.tokenCount = 0; // total number of tokens used. Will be less than this.matchesLookup.length at the end if any negatives are found
+		var tokenString = "";
+		var regPackOutput = this.input;
+		for (var i=0;i<this.matchesLookup.length;++i) {
+			var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
+			for (var j=0; j<this.matchesLookup.length;++j) {
+				if (this.matchesLookup[j].usedBy=="" && !this.matchesLookup[j].cleared) {
+					var count=0;
+					for (var index=regPackOutput.indexOf(this.matchesLookup[j].originalString, 0); index>-1; ++count) {
+						index=regPackOutput.indexOf(this.matchesLookup[j].originalString, index+1);
+					}
+					var gain = count*this.matchesLookup[j].len-count-this.matchesLookup[j].len-2;
+					var score = options.crushGainFactor*gain+options.crushLengthFactor*this.matchesLookup[j].len+options.crushCopiesFactor*count;
+					if (gain>=0) {
+						if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*count>options.crushTiebreakerFactor*bestCount))) // R>N JsCrush, R<N First Crush
+							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score,bestLength=this.matchesLookup[j].len;
+					} else {
+						// found a negative. The matching string may no longer be packed (if anything, match count will decrease, not increase)
+						// so we clear it (ie remove it from the dependency chain). This in turns allows strings it uses to be packed,
+						// otherwise their "usedBy" field would contain the negative and they could never be packed
+						// clearing a negative introduces a bias, since some strings that were in order before it could have been
+						// considered for compression, but they were not because they were "usedBy" the negative.
+						// The comparison is useless : do not compress for this iteration of i 
+						this.clear(j);
+						negativeCleared = true;
+					}
+				}
+			}
+			if (!negativeCleared) {	// skip the compression step if we had a negative
+				if (matchIndex>-1) {	// a string was chosen, replace it with the next token
+					var matchedString = this.matchesLookup[matchIndex].originalString;
+					this.matchesLookup[matchIndex].newOrder = this.tokenCount;
+					
+					// define the replacement token
+					++this.tokenCount;
+					if (++tokenIndex > tokenList[tokenLine].count) {
+						tokenString+=String.fromCharCode(tokenList[tokenLine].first);
+						if (tokenList[tokenLine].count>2) {
+							tokenString+="-";
+						}
+						if (tokenList[tokenLine].count>1) {
+							tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenList[tokenLine].count-1);
+						}
+						++tokenLine;
+						tokenIndex=1;
+					}
+					var tokenCode = tokenList[tokenLine].first + tokenIndex - 1;
+					// skip CR and LF characters
+					// earlier checks ensured that they never end a block 
+					// so we can safely skip to the next one
+					if (tokenCode==10 || tokenCode==13) {
+						++tokenCode;
+						++tokenIndex;
+					}
+					var token = String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
+
+					details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
+					regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
+					
+					// remove dependencies on chosen string/token
+					this.clear(matchIndex);
+				
+				} else {	// remaining strings, but no gain : skip them and end the loop
+					for (var j=0; j<this.matchesLookup.length;++j) {
+						if (!this.matchesLookup[j].cleared) {
+							details += "skipped str = "+this.matchesLookup[j].originalString+"\n";
+						}
+					}
+					i=this.matchesLookup.length;
+				}
+			}
+		}
+		
+		// add the last token to the list / token string
+		tokenString+=String.fromCharCode(tokenList[tokenLine].first);
+		if (tokenIndex>2) {
+			tokenString+="-";
+		}
+		if (tokenIndex>1) {
+			tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
+		}
+
+		// add the unpacking code to the compressed string
+		var checkedString = regPackOutput;
+		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
+		regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
+		regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
+		
+		var resultSize = this.getByteLength(regPackOutput);
+		
+		details+="------------------------\nFinal check : ";
+		var regToken = new RegExp("["+tokenString+"]","");
+		for(var token="" ; token = regToken.exec(checkedString) ; ) {
+			var k = checkedString.split(token);
+			checkedString = k.join(k.shift());
+		}
+		var success = (checkedString == this.input);
+		details+=(success ? "passed" : "failed")+".\n";
+		
+
+		return [resultSize, regPackOutput, details];
+	},
+
+	/**
+	 * Returns true if the character is not allowed in a RegExp char class or as a token (ie needs escaping)
+	 * Characters : LF, CR, ', ", \, 127
+	 */
+	isForbiddenCharacter : function(ascii)
+	{
+		return ascii==10||ascii==13||ascii==34||ascii==39||ascii==92||ascii==127;
+	},
+	
+	/**
+	 * Returns the number of forbidden characters in the interval (bounds inclusive)
+	 * Characters : same as in isForbiddenCharacter()
+	 */
+	countForbiddenCharacters : function (first, last)
+	{
+		var count=0;
+		for (var i=first; i<=last; ++i) {
+			count+=this.isForbiddenCharacter(i)?1:0;
+		}
+		return count;
+	},
+
+	/**
+	 * Returns true if the character requires a backlash as a prefix in the character class of the 
+	 * RegExp to be interpreted as part of the expression
+	 * Character : \ (used to escape others)
+	 * Character : ] (would close the character class otherwise)
+	 */
+	needsEscapingInCharClass : function(ascii)
+	{
+		return ascii==92||ascii==93;
+	},
+	
+	/**
+	 * Returns a printable string representing the character
+	 * including the needed escapes.
+	 * Characters from 1 to 31 are also escaped
+	 **/
+	getPrintableString : function (ascii)
+	{
+		if (ascii<32) {
+			return "\\"+ascii;
+		} else {
+			return (this.needsEscapingInCharClass(ascii)?"\\":"")+String.fromCharCode(ascii);
+		}
+	},
+
+	/**
+     * Returns the character matching the provided unicode value
+	 * as it should be displayed in a character class in a Regexp :
+	 *  -  ] needs escaping
+	 *  - characters above 256 are \u....
+	 *  - characters between 128 and 255 are \x..
+	 *  - others (even below 32) are raw
+	 */
+	printToRegexpCharClass : function(charCode)
+	{
+		var output = "";
+		if (charCode>255) {
+			output = "\\u"+(charCode<4096?"0":"")+charCode.toString(16);
+		} else if (charCode>127) {
+			output = "\\x"+charCode.toString(16);
+		} else {
+			output = (this.needsEscapingInCharClass(charCode)?"\\":"")+String.fromCharCode(charCode);
+		}
+		return output;
+	},
+
+
+	/**
+	 * Third stage : build the shortest negated character class regular expression
+	 * (a char class beginning with a ^, such as [^A-D] which comprises everything but characters A, B, C and D)
+	 */
+	packToNegatedRegexpCharClass : function() 
+	{
+		// Build a list of characters used inside the string (as ranges)
+		// characters not in the list can be
+		//  - forbidden as tokens (LF, CR, ', ", -, \, 127) although these are allowed in the string too
+		//  - used as compression tokens
+		//  - neither used as compression tokens (if there are leftovers) nor in the string
+		//    those can be included in the RegExp without affecting the output
+		var details = '';
+		var usedCharacters = [];
+		var forbiddenCharacters = [];
+		var firstInLine = -1;
+		var availableCharactersCount = 0;
+		for(i=1;i<128;++i) {
+			var token = String.fromCharCode(i);
+			if (this.input.indexOf(token)>-1) {
+				if (firstInLine ==-1) {
+					firstInLine = i;
+				}
+			} else {
+				if (firstInLine >-1) {
+					usedCharacters.push({first:firstInLine, last:i-1, size:Math.min(i-firstInLine,3)});
+					firstInLine = -1;
+				}
+				if (this.isForbiddenCharacter(i)) {
+					forbiddenCharacters.push(token);
+				} else {
+					++availableCharactersCount;
+				}
+			}
+		}
+		if (firstInLine >-1) {
+			usedCharacters.push({first:firstInLine, last:i-1, size:Math.min(i-firstInLine,3)});
+		}
+		
+		// Issue #2 : unicode characters handling
+		var inputContainsUnicode = false;
+		for (i=0;i<this.input.length&&!inputContainsUnicode;++i) {
+			inputContainsUnicode = inputContainsUnicode || (this.input.charCodeAt(i)>127);
+		}
+		if (inputContainsUnicode) {
+			// non-ASCII as a whole block. Those characters are not allowed as tokens,
+			// and the block can be merged later to save bytes
+			usedCharacters.push({first:128, last:65535, size:3});
+		}
+		
+		details = availableCharactersCount + " available tokens, "+this.tokenCount+" needed.\n"
+		for (i in usedCharacters)
+		{
+			j=usedCharacters[i];
+			details+=this.getPrintableString(j.first);
+			if (j.size>2) details+='-';
+			if (j.size>1) details+=this.getPrintableString(j.last);
+		}
+		details+="\n";
+		
+		
+		// Now, shorten the regexp by sacrificing some characters that will not be used as tokens.
+		// The second stage yielded the actual number of tokens required.
+		// The initial regexp lists all characters present in the string to compress. Since it is
+		// used with an initial negation ^, it will match on all other characters.
+		// Characters are split into used by the strings, tokens, and unused
+		// This step iterates on the RegExp, merging ranges to reduce its length.
+		// Characters between the ranges are included, thus lost as tokens.
+		// For instance, [A-K] is shorter than [A-CG-K] but loses D,E,F as potential tokens
+		// The process is repeated while there are enough tokens left.
+		var margin = availableCharactersCount - this.tokenCount;
+		var regExpString = "";
+		while (true) { // do not stop on margin==0, the next step may cost zero
+			var bestBlockIndex=[];
+			var bestGain = -999;
+			var bestCost = 999;
+			// gain may change at each step as we merge blocks, so qsort won't cut it
+			for (i=0;i<usedCharacters.length-1;++i) {
+				var currentBlock = usedCharacters[i];
+				var nextBlock = usedCharacters[i+1];
+				var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1);
+				var gain = currentBlock.size+nextBlock.size-3;
+				// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
+				if (currentBlock.first != currentBlock.last) {
+					gain+=this.printToRegexpCharClass(currentBlock.last).length-1;
+				}
+				if (nextBlock.first != nextBlock.last) {
+					gain+=this.printToRegexpCharClass(nextBlock.first).length-1;
+				}
+				// we cannot use the ratio gain/cost as cost may be 0, if the interval is only made of one forbidden character
+				if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
+					bestBlockIndex = [i];
+					bestCost = cost;
+					bestGain = gain;	// can be negative. Do not break yet, as the next one may be positive and offset the loss.
+				}
+				// attempt to merge three blocks in a row, to overcome a negative barrier
+				// (costly first merge, but that unlocks a gain of 3 or more)
+				// this helps getting rid of expensive characters such as ]
+				if (i<usedCharacters.length-2) {
+					var nextYetBlock = usedCharacters[i+2];
+					cost += nextYetBlock.first - nextBlock.last - 1  - this.countForbiddenCharacters(nextBlock.last+1, nextYetBlock.first-1);
+					gain += nextYetBlock.size;
+					gain += (this.needsEscapingInCharClass(nextBlock.last)?1:0);
+					if (nextYetBlock.first != nextYetBlock.last) {
+						gain+=(this.needsEscapingInCharClass(nextYetBlock.first)?1:0);
+					}
+					if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
+						bestBlockIndex = [i+1, i];
+						bestCost = cost;
+						bestGain = gain;
+					}
+				}
+			}
+			if (bestBlockIndex.length==0) break; // no matching block (negative gain, or too long)
+
+			for (i in bestBlockIndex) {
+				var blockIndex = bestBlockIndex[i];
+				var currentBlock = usedCharacters[blockIndex];	// accessed by reference of course
+				var nextBlock = usedCharacters[blockIndex+1];
+				currentBlock.last=nextBlock.last;
+				currentBlock.size=3;
+				usedCharacters.splice(1+blockIndex, 1);
+			}
+			margin -= bestCost;
+			
+			details +="gain "+bestGain+" for "+bestCost+", ";
+			details +="margin = "+margin+", ";
+			
+			// build the regular expression for unpacking
+			// character 93 "]" needs escaping to avoid closing the character class
+			var currentCharClass = "";
+			for (i in usedCharacters)
+			{
+				j=usedCharacters[i];
+				currentCharClass+=this.printToRegexpCharClass(j.first);
+				if (j.size>2) currentCharClass+='-';
+				if (j.size>1) currentCharClass+=this.printToRegexpCharClass(j.last);
+			}
+			details +=currentCharClass+"\n";
+			// keep the shortest RegExp - this may not be the last one if going through a negative gain streak
+			if (regExpString.length==0 || regExpString.length>currentCharClass.length) {
+				regExpString = currentCharClass;
+			}
+		}
+		
+		regExpString = "^"+regExpString;		
+		usedCharacters.push({first:128, last:128});	// upper boundary for the loop, increase to use multibyte characters as tokens
+		var tokenString = "";
+		var charIndex = 1;
+		for (var i=0;i<usedCharacters.length;++i)
+		{
+			while (charIndex<usedCharacters[i].first) {
+				if (!this.isForbiddenCharacter(charIndex)) {
+					tokenString+=String.fromCharCode(charIndex);
+				}
+				++charIndex;
+			}
+			charIndex = 1+usedCharacters[i].last;
+		}
+		details+= "tokens = "+tokenString+" ("+tokenString.length+")\n";
+		
+		// use the same matches order as in the second stage
+		this.matchesLookup.sort(function(a,b) {return a.newOrder-b.newOrder; });
+		var thirdStageOutput = this.input;
+		// and perform the replacement using the token string as listed above
+		for (var i=0;i<this.tokenCount;++i)
+		{
+			var matchedString = this.matchesLookup[i].originalString;
+			var token = tokenString[i];
+
+			details+=token.charCodeAt(0)+"("+token+"), str = "+matchedString+"\n";
+			thirdStageOutput = matchedString+token+thirdStageOutput.split(matchedString).join(token);
+		}
+		
+		// add the unpacking code to the compressed string
+		var checkedString = thirdStageOutput;
+		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
+		thirdStageOutput='for(_='+B+thirdStageOutput.replace(c,'\\'+B)+B;
+		thirdStageOutput+=';g=/['+regExpString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
+		
+		var resultSize = this.getByteLength(thirdStageOutput);
+		
+		details+="------------------------\nFinal check : ";
+		var regToken = new RegExp("["+regExpString+"]","");
+		for(var token="" ; token = regToken.exec(checkedString) ; ) {
+			var k = checkedString.split(token);
+			checkedString = k.join(k.shift());
+		}
+		var success = (checkedString == this.input);
+		details+=(success ? "passed" : "failed")+".\n";
+		
+
+		return [resultSize, thirdStageOutput, details];
+	} 
+
+};
+
+var packer = new RegPack();
+
+if (typeof require !== 'undefined') {
+    // Node
+    if (require.main !== module) {
+        console.log(module);
+        module.exports = {
+            RegPack: RegPack,
+            packer: packer,
+            cmdRegPack: cmdRegPack,
+            runPacker: runPacker
+        };
+    } else {
+        var argv = require('minimist')(process.argv.slice(2));
+        result = cmdRegPack(require('fs').readFileSync(argv._[0], 'utf-8'), argv);
+        console.log(result);
+    }
+}
