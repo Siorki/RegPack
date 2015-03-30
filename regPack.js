@@ -89,6 +89,7 @@ RegPack.prototype = {
 			output = packer.packToNegatedRegexpCharClass();
 			this.inputList[inputIndex].push(output);
 			
+			
 		}
 	},
 
@@ -184,7 +185,8 @@ RegPack.prototype = {
 
 	/**
 	 * Performs an optimal hashing and renaming of the methods of a canvas 2d context.
-	 * Uses a context reference passed from a shim, or attempts to locate in inside the code.
+	 * Uses a context reference passed from a shim (if provided), plus attempts to
+	 * identify all contexts created within the code.
 	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 * even if the preprocessing actually lenghtened the string.
 	 *
@@ -195,23 +197,31 @@ RegPack.prototype = {
 	 * @return the result array, or false if no 2d context definition is found in the code.
 	 */
 	preprocess2DContext : function(input, variableName, context, varsNotReassigned) {
-		// Obtain the context definition (variable name and location in the code)
-		var objectName = variableName, objectOffset = 0, declarationLength = 0, contextFound = false;
-		if (variableName) {
-			// either it is provided to us
-			contextFound = true;
-		} else {
-			var result = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(['"]2d['"]\)/i);
-			if (result) {
-				contextFound = true;
-				objectName = result[1];
-				objectOffset = input.indexOf(result[0]);
-				declarationLength = result[0].length;
+		// Obtain all context definitions (variable name and location in the code)
+		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		// Start with the preset context, if any
+		if (variableName)
+		{
+			objectNames.push(variableName);
+			objectOffsets.push(0);
+			objectDeclarationLengths.push(0);
+		}
+		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
+		var declarations = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(['"]2d['"]\)/gi);
+		if (declarations) {
+			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
+			{
+				var oneDecl = declarations[declIndex];
+				objectNames.push(oneDecl.substr(0, oneDecl.indexOf('=')));
+				var oneOffset = input.indexOf(oneDecl, searchIndex);
+				objectOffsets.push(oneOffset);
+				objectDeclarationLengths.push(oneDecl.length);
+				searchIndex = oneOffset + oneDecl.length;
 			}
 		}
-			
-		if (contextFound) {
-			var preprocessedCode = this.renameObjectMethods(input, objectName, objectOffset, declarationLength, context, varsNotReassigned);
+
+		if (objectNames.length) {
+			var preprocessedCode = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned);
 			return preprocessedCode;
 		}
 		return false;
@@ -234,26 +244,35 @@ RegPack.prototype = {
 	 * @return the result array, or false if no webgl context definition is found in the code.
 	 */
 	preprocessWebGLContext : function(input, variableName, context, varsNotReassigned) {
-		// Obtain the context definition (variable name and location in the code)
-		var objectName = variableName, objectOffset = 0, declarationLength = 0, contextFound = false;
-		if (variableName) {
-			// either it is provided to us
-			contextFound = true;
-		} else {
-			var result = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\))*/i);
-			if (result) {
-				contextFound = true;
-				objectName = result[1];
-				objectOffset = input.indexOf(result[0]);
-				declarationLength = result[0].length;
-			} 
+		// Obtain all context definitions (variable name and location in the code)
+		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		// Start with the preset context, if any
+		if (variableName)
+		{
+			objectNames.push(variableName);
+			objectOffsets.push(0);
+			objectDeclarationLengths.push(0);
 		}
-		if (contextFound) {
+		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
+		var declarations = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\))*/gi);
+		if (declarations) {
+			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
+			{
+				var oneDecl = declarations[declIndex];
+				objectNames.push(oneDecl.substr(0, oneDecl.indexOf('=')));
+				var oneOffset = input.indexOf(oneDecl, searchIndex);
+				objectOffsets.push(oneOffset);
+				objectDeclarationLengths.push(oneDecl.length);
+				searchIndex = oneOffset + oneDecl.length;
+			}
+		}
 			
-			var preprocessedCode = this.renameObjectMethods(input, objectName, objectOffset, declarationLength, context, varsNotReassigned);
-			preprocessedCode.push(objectName);
+		if (objectNames.length) {
+			var preprocessedCode = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned);
+			preprocessedCode.push(objectNames); // to provide to replaceWebGLconstants() afterwards
 			return preprocessedCode;
 		}
+
 		return false;
 	},
 	
@@ -265,29 +284,34 @@ RegPack.prototype = {
 	 * Only the constant values in CAPITALS are replaced. Other properties and methods are untouched.
 	 *
 	 * @param input the code to perform replacement on
-	 * @param objectName the variable holding the context (mandatory)
+	 * @param objectName array containing variable names of context objects (mandatory)
 	 * @param context an instance of a canvas webgl context, to check for exiting properties and obtain their values
-	 * @return the result array, or false if no webgl context definition is found in the code.
+	 * @return an array [length, output, user message]
 	 */
-	replaceWebGLconstants : function (input, objectName, context)
+	replaceWebGLconstants : function (input, objectNames, context)
 	{
-		var exp = new RegExp(objectName+"\\.([0-9A-Z_]*)[^\\w\\d_(]","g");
-		var constantsInUse=[];
-		var result=exp.exec(input);
-		while (result) {	// get a set with a unique entry for each method
-			if (constantsInUse.indexOf(result[1])==-1) {
-				constantsInUse.push(result[1]);
-			}
-			result=exp.exec(input);
-		}
 		var output = input, details="";
-		details += "Replaced constants of "+objectName+"\n";
-		for (var index=0; index<constantsInUse.length; ++index) {
-			if (constantsInUse[index] in context) {
-				var constant = context[constantsInUse[index]];
-				output = output.split(objectName+"."+constantsInUse[index]).join(constant);
-				// show the renaming in the details
-				details += constantsInUse[index] + " -> " + constant + "\n";
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+		{
+			var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\.([0-9A-Z_]*)[^\\w\\d_(]","g");
+			var constantsInUse=[];
+			var result=exp.exec(output);
+			while (result) {	// get a set with a unique entry for each method
+				if (constantsInUse.indexOf(result[2])==-1) {
+					constantsInUse.push(result[2]);
+				}
+				result=exp.exec(output);
+			}
+
+			details += "Replaced constants of "+objectNames[contextIndex]+"\n";
+			for (var index=0; index<constantsInUse.length; ++index) {
+				if (constantsInUse[index] in context) {
+					var constant = context[constantsInUse[index]];
+					var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+constantsInUse[index],"g");						
+					output = output.replace(exp, "$1"+objectNames[contextIndex]+"."+constant);
+					// show the renaming in the details
+					details += constantsInUse[index] + " -> " + constant + "\n";
+				}
 			}
 		}
 		return [this.getByteLength(output), output, details];
@@ -296,6 +320,8 @@ RegPack.prototype = {
 	
 	/**
 	 * Performs an optimal hashing and renaming of the methods of an AudioContext.
+	 * Unlike 2D contexts, only one audio context is considered.
+	 *
 	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 * even if the preprocessing actually lenghtened the string.
 	 *
@@ -358,7 +384,7 @@ RegPack.prototype = {
 				objectName = replacementOffset>webkitReplacementOffset ? resultWebkit[1] : objectName ;
 				
 				// perform the replacement for the latter object first, so the offset of the former is not changed
-				var halfReplaced =this.renameObjectMethods(input, secondObjectName, secondReplacementOffset, 0, context);
+				var halfReplaced =this.renameObjectMethods(input, [secondObjectName], [secondReplacementOffset], [0], context);
 				input = halfReplaced[1];
 				details = halfReplaced[2];
 			}
@@ -406,7 +432,7 @@ RegPack.prototype = {
 		}
 		
 		if (replacementOffset>0) {
-			var preprocessedCode = this.renameObjectMethods(input, objectName, replacementOffset, 0, context, varsNotReassigned);
+			var preprocessedCode = this.renameObjectMethods(input, [objectName], [replacementOffset], [0], context, varsNotReassigned);
 			preprocessedCode[2] = details + preprocessedCode[2];
 			return preprocessedCode;
 		}
@@ -419,19 +445,32 @@ RegPack.prototype = {
 	 * Identifies the optimal hashing function (the one returning the shortest result)
 	 * then renames all the methods with their respective hash, and preprends the hashing code.
 	 *
-	 * Replacement is only performed from the definition of the object (graphic or audio context) on, 
-	 * hence the offset parameter
+	 * The hashing loop looks like : for(i in c)c[i[0]+[i[6]]=c[i];
+	 * meaning that later one may call c.fc(...) instead of c.fillRect(...)
+	 * The newly created properties are reference to existing functions.
+	 *
+	 * Replacement is performed at the last object assignment(graphic or audio context), 
+	 * or at the beginning for shim context, hence the offset parameter.
+	 *
+	 * If there are several contexts, only one hash is used. It is applied to
+	 * all or only some of the contexts, depending on the computed gain.
+	 * The algorithm will not define different hashes for the multiple
+	 * contexts. The rationale behind this is the assumption that the lesser
+	 * gain from using the same hash for all will be offset by the better
+	 * compression - as the repeated hashing pattern will be picked up by the
+	 * packer.
 	 *
  	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 *
 	 * @param input : the string to pack
-	 * @param objectName : the name of the variable holding the object (context) whose methods to rename in the source string
-	 * @param offset : character offset to the beginning of the object declaration. Zero if defined outside (shim)
-	 * @param declarationLength : length of the object declaration, starting at offset. Zero if defined outside (shim)
+	 * @param objectNames : array containing variable names of context objects, whose methods to rename in the source string
+	 * @param objectOffsets : array, in the same order, of character offset to the beginning of the object declaration. Zero if defined outside (shim)
+	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
 	 * @param reference : an instance of an object of the same type (2D context, WebGL context, ..) to extract method names
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
+	 * @return the result of the renaming as an array [output length, output string, informations]
 	 */
-	renameObjectMethods : function(input, objectName, offset, declarationLength, reference, varsNotReassigned)
+	renameObjectMethods : function(input, objectNames, objectOffsets, objectDeclarationLengths, reference, varsNotReassigned)
 	{
 		// these are the hashing functions that will be tested
 		var hashFunctions = [
@@ -448,24 +487,31 @@ RegPack.prototype = {
 							];
 				
 		var details = '';
-		var exp = new RegExp(objectName+"\\.(\\w*)\\(","g");
-		var methodsInUse=[];
-		var result=exp.exec(input);
-		while (result) {	// get a set with a unique entry for each method
-			if (methodsInUse.indexOf(result[1])==-1) {
-				methodsInUse.push(result[1]);
+		var methodsInUseByContext=[];
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+		{
+			var methodsInUse = [];
+			var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\.(\\w*)\\(","g");
+			var result=exp.exec(input);
+			while (result) {	// get a set with a unique entry for each method
+				if (methodsInUse.indexOf(result[2])==-1) { 
+					methodsInUse.push(result[2]);	
+				}
+				--exp.lastIndex; // the final ( can be reused as initial separator in the next expression
+				result=exp.exec(input);
 			}
-			result=exp.exec(input);
+			methodsInUseByContext.push(methodsInUse);
 		}
+
 		
-		var bestScore = -999, bestIndex =-1, bestYValue = 0;
-		// For each hashing function, we compute the hashed names of all methods of the object (canvas or other)
+		var bestTotalScore = -999, bestIndex =-1, bestYValue = 0, bestScoreByContext = [];
+		// For each hashing function, we compute the hashed names of all methods of the context object
 		// All collisions (such as taking the first letter of scale() and save() end up in s()) are eliminated
 		// as the order depends on the browser and we cannot assume the browser that will be running the final code
-		// A score is then assigned to the hashing function by 
-		//   - adding the gain obtained by shortening the non-colliding method names to their hash
+		// A score is then assigned to the hashing function :
+		//   - for each context, the algorithm computes the gain obtained by shortening the non-colliding method names to their hash
 		//     (the number of occurrences is irrelevant, we assume that the compression step will amount them to one)
-		//   - subtracting the length of the hashing function
+		//   - the length of the hashing function is subtracted
 		// Only the hashing function with the best score is kept - and applied
 		for (var functionIndex=0; functionIndex<hashFunctions.length; ++functionIndex) {
 			for (var yValue=1; yValue<=hashFunctions[functionIndex][1] ; ++yValue) {
@@ -477,18 +523,30 @@ RegPack.prototype = {
 				for (w in reverseLookup) {
 					forwardLookup[reverseLookup[w]]=w;	// keep only the method names with no collisions
 				}
-				var score = 0;
-				for (var index=0; index<methodsInUse.length; ++index) {
-					// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
-					// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
-					if (typeof(forwardLookup[methodsInUse[index]])=="string") {
-						score += methodsInUse[index].length - forwardLookup[methodsInUse[index]].length;
+				var allScores = [], totalScore = 0;
+				for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+				{
+					var score = 0;
+					var methodsInUse = methodsInUseByContext[contextIndex];
+					for (var methodIndex=0; methodIndex<methodsInUse.length; ++methodIndex) {
+						// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
+						// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
+						if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
+							score += methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
+						}
 					}
+					score -= 7; // c[hash]=c[i], "[hash]=" is packed for 1, remain "c" and "c[i]," total 1+1+5
+					score = Math.max(0, score); // if the gain is negative, no replacement will be performed
+					allScores.push(score); 
+					totalScore += score;
 				}
-				score-=hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
+				// the score for the hash is the gain as computed above,
+				// minus the length of the hash function itself.
+				totalScore-=hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
 								
-				if (score>bestScore) {
-					bestScore = score;
+				if (totalScore>bestTotalScore) {
+					bestTotalScore = totalScore;
+					bestScoreByContext = allScores;
 					bestIndex = functionIndex;
 					bestYValue = yValue;
 				}
@@ -505,16 +563,44 @@ RegPack.prototype = {
 			forwardLookup[reverseLookup[w]]=w;
 		}
 		var hashedCode = input;
-		details += "Renamed methods for "+objectName+"\n";
-		for (var index=0; index<methodsInUse.length; ++index) {
-			// Fix for issue #11, needed in this iteration again
-			if (typeof(forwardLookup[methodsInUse[index]])=="string") {
-				// replace all instances of that method in one call.
-				// The opening bracket at the end avoids triggering on a subset of the name,
-				// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
-				hashedCode = hashedCode.split(objectName+"."+methodsInUse[index]+"(").join(objectName+"."+forwardLookup[methodsInUse[index]]+"(");
-				// show the renaming in the details, for used methods only
-				details += forwardLookup[methodsInUse[index]] + " -> " + methodsInUse[index] + "\n";
+		
+		// Tell the user what is being replaced, and what is ignored
+		var renamedList = "", notRenamedList = "";
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+		{
+			if (bestScoreByContext[contextIndex]) {
+				renamedList += (renamedList.length>0?", " : "") + objectNames[contextIndex];
+			} else {
+				notRenamedList += (notRenamedList.length>0?", " : "") + objectNames[contextIndex];
+			}
+		}
+		if (notRenamedList.length>0) {
+			details += "No renaming for "+notRenamedList+".\n";
+		}
+		if (renamedList.length>0) {
+			details += "Renamed methods for "+renamedList+"\n";
+		}
+		
+		// Perform the replacement inside the code
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
+			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+				var methodsInUse = methodsInUseByContext[contextIndex];
+				for (var methodIndex=0; methodIndex<methodsInUse.length; ++methodIndex) {
+				
+					// Fix for issue #11, needed in this iteration again
+					if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
+						// replace all instances of that method ("g" option in the RegExp)
+						// The opening bracket at the end avoids triggering on a subset of the name,
+						// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
+						// The initial character (or line start) avoids triggering if one context has a name
+						// ending in another context's name (such as 'c' and 'cc')
+						var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+methodsInUse[methodIndex]+"\\(","g");						
+						hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]]+"(");
+
+						// show the renaming in the details, for used methods only
+						details += objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]] + " -> " + methodsInUse[methodIndex] + "\n";
+					}
+				}
 			}
 		}
 		details += "\n";
@@ -548,7 +634,6 @@ RegPack.prototype = {
 		}
 		details += "\n";
 		
-		var output = hashedCode.substr(0, offset);
 
 		// Create the final hashing expression by replacing the placeholder variables
 		var expression = hashFunctions[bestIndex][0].replace(/w/g, indexName);
@@ -557,16 +642,39 @@ RegPack.prototype = {
 		if (input.split('"').length>input.split("'").length) {
 			expression = expression.replace(/'/g, '"');
 		}
+
+		// Determine where in the code the hashing loop wiil be inserted.
+		// (at the declaration of the last context that gets hashed).
+		var offset = 0, loopContext = 0, shortestContext = 0;
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
+			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+				offset = objectOffsets[contextIndex];	// perform the replacement at the latest context definition
+				loopContext = contextIndex;
+				// retrieve the context with the shortest name, will be used
+				// as right-member of the hashing assignment
+				if (objectNames[contextIndex].length <  objectNames[shortestContext].length) {
+					shortestContext = contextIndex;
+				}
+			}
+		}
+		var output = hashedCode.substr(0, offset);
 		
 		// Insert the hashing/renaming loop in the code.
 		// If the context definition is not included (js1k shim for instance), the loop is prepended to the code and ends with ";"
-		// otherwise the loop replaces and includes the declaration. The code looks like :
-		//   for (i in a=c.getContext('2d'))a[...]=a[i]
+		// otherwise the loop replaces and includes the last declaration. The code looks like :
+		//   for (i in c=a.getContext('2d'))c[...]=c[i] with a single context
+		//   for (i in c=a.getContext('2d'))c[...]=b[...]=b[i] with multiple contexts (surprising, but it works)
 		// The ending separator is kept, unless it is a comma ",", in which case it is replaced with a semicolon ";"
 		// (to avoid including the trailing code in the loop)
-		output+="for("+indexName+" in "+(declarationLength==0?objectName:hashedCode.substr(offset, declarationLength))+")";
-		output+=objectName+"["+expression+"]="+objectName+"["+indexName+"]";
-		var k=hashedCode[offset+declarationLength];
+		var declarationLength = objectDeclarationLengths[loopContext];
+		output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
+			if (bestScoreByContext[contextIndex]) {	
+				output+=objectNames[contextIndex]+"["+expression+"]=";
+				needsComma = true;
+			}
+		}		
+		output+=objectNames[shortestContext]+"["+indexName+"]";
 		if (hashedCode[offset+declarationLength]==",") {
 			// replace the trailing "," with ";" as explained above
 			output+=";";
