@@ -29,9 +29,8 @@ node ./regPack.js input.js --crushGainFactor 1 --crushLengthFactor 0 --crushCopi
 
 --
 Licensed under [MIT license](http://opensource.org/licenses/mit-license.html).
-
-Code produced by RegPack, including the hashing (if included) and unpacking routines, is not affected by the license. No restriction to its usage or redistribution arise from its compression by RegPack.  
-
+Code produced by RegPack, including the hashing (if included) and unpacking routines, is not affected by the license.
+No restriction to its usage or redistribution arise from its compression by RegPack.  
 --
   
 Any feedback or improvement suggestions appreciated.
