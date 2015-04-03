@@ -40,7 +40,9 @@ function RegPack() {
 	this.originalInput='';
 	this.input='';
 	this.originalLength=0;
-	this.modifier = '';
+	this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
+	this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
+	this.wrappedInit = '';	// code inside the unpacked routine
 	
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
@@ -76,7 +78,9 @@ RegPack.prototype = {
                         crushGainFactor : parseFloat(2),
                         crushLengthFactor : parseFloat(1),
                         crushCopiesFactor : parseFloat(0),
-                        crushTiebreakerFactor : parseInt(1)
+                        crushTiebreakerFactor : parseInt(1),
+						wrapInSetInterval : false,
+						timeVariableName : ""
                 };
                 for (var opt in default_options) {
                     if (!(opt in options)) {
@@ -117,21 +121,29 @@ RegPack.prototype = {
 	 *       -  hash2DContext : true if the option "Hash and rename 2D canvas context" was selected, false otherwise
 	 *       -  hashWebGLContext : true if the option "Hash and rename WebGL canvas context" was selected, false otherwise
 	 *       -  hashAudioContext : true if the option "Hash and rename AudioContext" was selected, false otherwise
-	 *       -  variableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
+	 *       -  contextVariableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
 	 *       -  contextType : the context type (0=2D, 1=WebGL) if the "assume context" option was selected, irrelevant otherwise
 	 *       -  reassignVars : true to globally reassign variable names 
 	 *       -  varsNotReassigned : boolean array[128], true to prevent variable from being renamed
+	 *       -  wrapInSetInterval : true to wrap the unpacked code in a setInterval() call instead of eval()
+	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
 	 */
 	preprocess : function(input, options) {
 		this.originalInput = input;
 		this.originalLength = this.getByteLength(input);
-		this.environment = '';
 		if (options.withMath) {
 			input = input.replace(/Math\./g, '');
 			this.environment = 'with(Math)';
 		}
 		
-		var inputList = [["", [this.getByteLength(input), input, ""]]];
+		var inputList = [];
+		if (options.wrapInSetInterval) {
+			var refactored = this.refactorToSetInterval(input, options.timeVariableName, options.varsNotReassigned);
+			inputList.push(["", refactored]);
+		} else {
+			inputList.push(["", [this.getByteLength(input), input, ""]]);
+		}
+		
 		
 		// Hash and rename methods of the 2d canvas context
 		//  - method hashing only
@@ -193,6 +205,136 @@ RegPack.prototype = {
 	},
 
 	/**
+	 * Rewrites the input code so that it can entirely be executed inside
+	 * a setInterval() loop without prior initialization.
+	 *
+	 * Detects the function that is currently called through setInterval()
+	 * and strips it. Wraps the code before that function into a if sequence
+	 * at the beginning of the loop, that will only be run once.
+	 *
+	 * The method makes use of a "time" variable that usually controls
+	 * the flow of execution/rendering, and is increased at each loop.
+	 * It only needs to be zero on the first run to trigger the initialization
+	 * sequence, then nonzero on the subsequent runs.
+	 *
+	 * Returns an array 
+	 * [refactored code size, refactored code, information log]
+	 * 
+	 * @param input the code to refactor
+	 * @param timeVariableName the variable containing time, or empty
+	 * @param varsNotReassigned boolean array[128], true to avoid altering variable
+	 * @return result of refactoring
+	 * 
+	 */
+	refactorToSetInterval : function(input, timeVariableName, varsNotReassigned) {
+		var output = input;
+		var details = "----------- Refactoring to run with setInterval() ---------------\n";
+		var timeVariableProvided = true;
+		var loopMatch = input.match(/setInterval\(function\(([\w\d.=]*)\){/);
+		if (loopMatch) {
+			var initCode = input.substr(0, loopMatch.index);
+			// remove any trailing comma or semicolon			
+			if (initCode[initCode.length-1]==';' || initCode[initCode.length-1]==',') {
+				initCode = input.substr(0, initCode.length-1);
+			}
+			
+			details += "First "+loopMatch.index+" bytes moved to conditional sequence.\n";
+			
+			if (timeVariableName=="") {
+				timeVariableProvided = false;
+				timeVariableName = this.allocateNewVariable(input);
+				details += "Using variable "+timeVariableName+" for time.\n";
+			}
+			
+			// Strip the declaration of the time variable from the init code,
+			// as it will be defined in the unpacking routine instead.
+			var timeDefinitionExp = new RegExp("(^|[^\\w$])"+timeVariableName+"=","g");
+			var timeDefinitionMatch=timeDefinitionExp.exec(initCode);
+			if (timeDefinitionMatch) {
+				var timeDefinitionBegin = timeDefinitionMatch.index+timeDefinitionMatch[1].length;
+				var timeDefinitionEnd = timeDefinitionBegin+2;
+				
+				// Check if we can strip more than "t=" depending on what comes before and after :
+				//  - Brackets means no : the declaration is used as an argument in a function
+				//  - Square brackets means no : used to define an array
+				//  - Both commas before and after : same context, inside function or array
+				//  - a leading = means no : multiple variables are defined at the same time
+				//  - anything other than "0" after is no
+				//  - other configurations are ok to remove up to the separator
+				var canRemoveInitValue = true;
+				var leadingChar = timeDefinitionBegin>0 ? initCode[timeDefinitionBegin-1] : "";
+				var trailingChar = initCode[timeDefinitionEnd];
+				var furtherChar = timeDefinitionEnd+1<initCode.length ? initCode[timeDefinitionEnd+1] : "";
+				canRemoveInitValue = canRemoveInitValue && (leadingChar != "=");	// multiple variable init
+				canRemoveInitValue = canRemoveInitValue && (trailingChar == "0");	// multiple variable init, or function call
+				canRemoveInitValue = canRemoveInitValue && (leadingChar != "("); 	// used as a function argument
+				canRemoveInitValue = canRemoveInitValue && (leadingChar != "["); 	// used as array member
+				canRemoveInitValue = canRemoveInitValue && (furtherChar != ")"); 	// used as a function argument
+				canRemoveInitValue = canRemoveInitValue && (furtherChar != "]"); 	// used as array member
+				canRemoveInitValue = canRemoveInitValue && !(leadingChar == "," && furtherChar == ","); 	// used as a function argument
+				timeDefinitionEnd+=(canRemoveInitValue?1:0);
+				timeDefinitionEnd+=(canRemoveInitValue&&furtherChar==";"?1:0);
+				timeDefinitionEnd+=(canRemoveInitValue&&furtherChar==","&&leadingChar==""?1:0);
+				timeDefinitionBegin+=(canRemoveInitValue&&furtherChar!=";"&&leadingChar==";"?-1:0);
+				timeDefinitionBegin+=(canRemoveInitValue&&furtherChar==""&&leadingChar==","?-1:0);
+				
+				details += "Removed declaration \""+initCode.substr(timeDefinitionBegin, timeDefinitionEnd-timeDefinitionBegin)+"\"\n";
+				initCode = initCode.substr(0,timeDefinitionBegin)+initCode.substr(timeDefinitionEnd);
+			}
+
+
+			
+			var inString = 0, bracketDepth = 1, index = loopMatch.index+loopMatch[0].length;
+			while (bracketDepth>0 && index<input.length)
+			{
+				if (inString == 0) {
+					switch (input.charCodeAt(index)) {
+						case 34 : // "
+						case 39 : // '
+							inString = input.charCodeAt(index);
+							break;
+						case 123 : // {
+							++bracketDepth;
+							break;
+						case 125 : // }
+							--bracketDepth;
+							break;
+					}
+				} else if (input.charCodeAt(index) == inString && inString>0) {
+					inString = 0;
+				}
+				++index;
+			}
+			var finalCode = input.substr(index);
+			var delayMatch = finalCode.match(/,([\w\d.=]*)\);?/);
+			if (delayMatch) {
+				finalCode = finalCode.substr(delayMatch[0].length);
+				if (finalCode.length) {
+					details += "Last "+finalCode.length+" bytes also moved there.\n";
+					finalCode = ";"+finalCode;
+				}
+				details += "Interval of "+delayMatch[1]+ "ms pushed to unpacking routine.\n";
+				
+				// wrap the initialization code into a conditional sequence :
+				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
+				//   - if(!t++){/*init code*/} if it is created only for the test
+				initCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){"+loopMatch[1]+initCode+finalCode+"}";
+				output = initCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
+				
+				this.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
+				this.wrappedInit = timeVariableName+'=0';
+			 } else {	// delayMatch === false
+				details += "Unable to find delay for setInterval, module skipped.\n";
+			}
+			
+		} else {
+			details += "setInterval() loop not found, module skipped.\n";
+		}
+		details += "\n";
+		return [output.length, output, details];
+	},	
+	
+	/**
 	 * Performs an optimal hashing and renaming of the methods/properties of a canvas 2d context.
 	 * Uses a context reference passed from a shim (if provided), plus attempts to
 	 * identify all contexts created within the code.
@@ -212,6 +354,7 @@ RegPack.prototype = {
 	preprocess2DContext : function(input, variableName, context, varsNotReassigned, initialLog) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		initialLog += "----------- Hashing methods/properties for 2D context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
@@ -267,6 +410,7 @@ RegPack.prototype = {
 	preprocessWebGLContext : function(input, variableName, context, varsNotReassigned, initialLog) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		initialLog += "----------- Hashing methods/properties for GL context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
@@ -369,6 +513,8 @@ RegPack.prototype = {
 		var replacementOffset = 0;
 		var objectName = "";
 		var details = initialLog;
+		details += "----------- Hashing methods for AudioContext --------------------\n";
+
 		// direct instanciation of an AudioContext
 		// var c = new AudioContext()
 		var result = input.match (/([\w\.]*)\s*=\s*new AudioContext/i);
@@ -976,26 +1122,62 @@ RegPack.prototype = {
 	},
 	
 	/**
-	 * Renames one-letter variables in the code, in order to group characters in consecutive blocks as much as possible.
-	 * This will leave larger empty blocks for tokens, so that the character class that represents them
-	 * in the final regular expression will be shorter : a block is represented by three characters (begin,
-	 * dash, end), no matter now many are comprised in between.
-	 * This operation does not change the length of the code nor its inner workings.
-	 *
-	 * The method :
-	 * - lists all the one-letter variables in the code
-	 * - identifies those using a character that is not otherwise present in classes or keywords
-	 *   (meaning that renaming them will actually free the character to use as a token)
-	 * - identifies all the characters in use by classes or language keywords
-	 * - reassign those to variables, if available (not used by other variables)
-	 * - if there are remaining variables in need of a name, fill gaps in the ASCII table, starting with the shortest ones.
-	 *   (for instance, if a,c,d,e,g,h are in use, it will assign b and f, since [a-h] is shorter than [ac-egh]
-	 *
-	 * @param input string containing the code to process
-	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
-	 * @return array [code with reassigned variable names, informations]
+	 * Defines and returns a packer-friendly name for a new variable.
+	 * 
+	 * It first lists characters used in keywords but not in existing variables.
+	 * If none is found, it takes the first character not assigned
+	 * to a variable.
+	 * If none is available, it returns a two-letter variable.
+	 * 
+	 * @param input the input code to preprocess / pack
+	 * @see discriminateKeywordsAndVariables
 	 */
-	reassignVariableNames : function (input, varsNotReassigned)
+	allocateNewVariable : function(input)
+	{
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(input);
+		var keywordChars = keywordsAndVariables[0];
+		var variableChars = keywordsAndVariables[1];
+		
+		// first, characters already used by functions, keywords ..
+		for (var i=33; i<128; ++i) {
+			if (keywordChars[i] && !variableChars[i] && this.isCharAllowedInVariable(i) && !this.isDigit(i)) {
+				return String.fromCharCode(i);
+			}
+		}
+		
+		// then, one-letter names not used by variables
+		for (var i=33; i<128; ++i) {
+			if (!variableChars[i] && this.isCharAllowedInVariable(i) && !this.isDigit(i)) {
+				return String.fromCharCode(i);
+			}
+		}
+		
+		// if still not, try two-letter names
+		for (var i=97; i<122; ++i) {
+			for (var j=97; j<122; ++j) {
+				name = String.fromCharCode(i,j);
+				if (input.indexOf(name)==-1) {
+					return name;
+				}
+			}
+		}
+		
+		return "__";
+	},
+	
+	/**
+	 * Identify the characters used in user variable names
+	 * and those used in keywords. Unicode characters are not supported.
+	 *
+	 * The result can be used for renaming variables or to
+	 * allocate a new variable name
+	 * @see reassignVariableNames
+	 * @see allocateNewVariable
+	 * 
+	 * @param input the input code to preprocess / pack
+	 * @return array [ keywords, variables ], each is a boolean [128]
+	 */
+	discriminateKeywordsAndVariables : function(input)
 	{
 		var variableChars = [];
 		var keywordChars = [];
@@ -1038,8 +1220,37 @@ RegPack.prototype = {
 				previousChar=currentChar;
 			}
 		}
+		return [ keywordChars, variableChars];
+	},
+	
+	/**
+	 * Renames one-letter variables in the code, in order to group characters in consecutive blocks as much as possible.
+	 * This will leave larger empty blocks for tokens, so that the character class that represents them
+	 * in the final regular expression will be shorter : a block is represented by three characters (begin,
+	 * dash, end), no matter now many are comprised in between.
+	 * This operation does not change the length of the code nor its inner workings.
+	 *
+	 * The method :
+	 * - lists all the one-letter variables in the code
+	 * - identifies those using a character that is not otherwise present in classes or keywords
+	 *   (meaning that renaming them will actually free the character to use as a token)
+	 * - identifies all the characters in use by classes or language keywords
+	 * - reassign those to variables, if available (not used by other variables)
+	 * - if there are remaining variables in need of a name, fill gaps in the ASCII table, starting with the shortest ones.
+	 *   (for instance, if a,c,d,e,g,h are in use, it will assign b and f, since [a-h] is shorter than [ac-egh]
+	 *
+	 * @param input string containing the code to process
+	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
+	 * @return array [code with reassigned variable names, informations]
+	 */
+	reassignVariableNames : function (input, varsNotReassigned)
+	{
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(input);
+		var keywordChars = keywordsAndVariables[0];
+		var variableChars = keywordsAndVariables[1];
 
-		var details = "all variables : ";
+		var details = "----------- Renaming variables to optimize RegExp blocks --------\n";
+		details += "All variables : ";
 		for (var i=32; i<128; ++i) {
 			if (variableChars[i]) {
 				details+=String.fromCharCode(i);
@@ -1213,7 +1424,7 @@ RegPack.prototype = {
 		}
 			
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with(_.split(g[i]))_=join(pop());'+this.environment+'eval(_)';
+		i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with(_.split(g[i]))_=join(pop('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 
@@ -1392,7 +1603,7 @@ RegPack.prototype = {
 		var checkedString = regPackOutput;
 		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
-		regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
+		regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		
 		var resultSize = this.getByteLength(regPackOutput);
 		
@@ -1656,7 +1867,7 @@ RegPack.prototype = {
 		var checkedString = thirdStageOutput;
 		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		thirdStageOutput='for(_='+B+thirdStageOutput.replace(c,'\\'+B)+B;
-		thirdStageOutput+=';g=/['+regExpString+']/.exec(_);)with(_.split(g))_=join(shift());'+this.environment+'eval(_)';
+		thirdStageOutput+=';g=/['+regExpString+']/.exec(_);)with(_.split(g))_=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		
 		var resultSize = this.getByteLength(thirdStageOutput);
 		

@@ -33,7 +33,9 @@ Attempt method hashing and renaming for
 </select> <i>(as in js1k shim)</i>
 <br><input type="checkbox" name="paramOReassignVars" id="paramOReassignVars" checked="checked"/> Reassign variable names to produce consecutive character blocks,
 except for variables <input type="text" value="a b c" id="paramOExcludedVars" />
-<br><br><b>RegPack v3.0.2</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
+<br><input type="checkbox" name="paramOWrapInSetInterval" id ="paramOWrapInSetInterval" checked="checked"/> Refactor to run with setInterval(). Use variable 
+<input type="text" size=6 value="t" id="paramOTimeVariable" /> for time (leave empty to assign one).
+<br><br><b>RegPack v4.0 alpha</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
 Score = <input type="text" size=6 value=1 id="paramFGain" />
 *gain + <input type="text" size=6 value=0 id="paramFLength" />
 *length + <input type="text" size=6 value=0 id="paramFCopies" />
@@ -78,7 +80,9 @@ function doRegPack(withMath) {
 		crushGainFactor : parseFloat(document.getElementById("paramFGain").value),
 		crushLengthFactor : parseFloat(document.getElementById("paramFLength").value),
 		crushCopiesFactor : parseFloat(document.getElementById("paramFCopies").value),
-		crushTiebreakerFactor : parseInt(document.getElementById("paramFTiebreaker").value)
+		crushTiebreakerFactor : parseInt(document.getElementById("paramFTiebreaker").value),
+		wrapInSetInterval : document.getElementById("paramOWrapInSetInterval").checked!="",
+		timeVariableName : document.getElementById("paramOTimeVariable").value
 	};
 	var varsNotReassignedRaw = document.getElementById("paramOExcludedVars").value;
 	for (var i=0; i<127; ++i) {
