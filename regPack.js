@@ -377,8 +377,21 @@ RegPack.prototype = {
 		}
 
 		// Fix for issue #20 - make sure the behavior is identical in all browsers
+		// by creating extra methods / properties
 		// needs to be reconsidered at each new browser revision 
-		context["drawImageFromRect"]=context["drawImage"];
+		// (current are FF 36 / Chrome 41)
+		context["ellipse"]=context["arc"];	// Chrome only, not in FF 36
+		context["getContextAttributes"]=context["arc"];	// Chrome only, not in FF 36
+		context["imageSmoothingEnabled"]=true; // Chrome only, not in FF 36
+		context["mozCurrentTransform"]=context.transform;	// FF-prefixed
+		context["mozCurrentTransformInverse"]=context.transform;	// FF-prefixed
+		context["mozDash"]=[5,5];	// FF-prefixed
+		context["mozDashOffset"]=context.lineDashOffset;	// FF-prefixed
+		context["mozFillRule"]="nonZero";	// FF-prefixed
+		context["mozImageSmoothingEnabled"]=true;	// FF-prefixed
+		context["mozTextStyle"]="20pt Arial";	// FF-prefixed
+		context["webkitImageSmoothingEnabled"]=true; // Chrome-prefixed
+		context["drawImageFromRect"]=context["drawImage"];	// deprecated, gone from Chrome 41+
 		
 		if (objectNames.length) {
 			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned, initialLog);
