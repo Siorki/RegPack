@@ -717,9 +717,9 @@ RegPack.prototype = {
 								score += methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
 							}
 						}
-						score -= 7; // c[hash]=c[i], "[hash]=" is packed for 1, remain "c" and "c[i]," total 1+1+5
-						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
+						score -= 2; // a[hash]=b[hash]=a[i], "[hash]=" is packed for 1, remains "a" total 1+1
 						allScores.push(score); 
+						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
 						totalScore += score;
 					}
 					// the score for the hash is the gain as computed above,
@@ -969,17 +969,16 @@ RegPack.prototype = {
 								score += propertiesInUse[propertyIndex].length - forwardLookup[propertiesInUse[propertyIndex]].length;
 							}
 						}
-						score -= 2; // c[hash]= "[hash]=" is packed for 1, remains "c", total 1+1
-						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
 						allScores.push(score); 
+						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
 						totalScore += score;
 					}
 					// the score for the hash is the gain as computed above,
 					// minus the length of the hash function itself.
 					totalScore-=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue).length;
 					
-					//debug
-					details +=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue) + " : "+totalScore +"\n";
+					// Debug log
+					// details +=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue) + " : "+totalScore +"\n";
 									
 					if (totalScore>bestTotalScore) {
 						bestTotalScore = totalScore;
