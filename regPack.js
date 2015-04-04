@@ -40,20 +40,19 @@ function RegPack() {
 	this.originalInput='';
 	this.input='';
 	this.originalLength=0;
-	this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
-	this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
-	this.wrappedInit = '';	// code inside the unpacked routine
 	
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
-		["w[0]", 1, function(w,y) { return w[0]; } ],
-		["w[0]+w[y]", 3, function(w,y) { return w[0]+w[y]; } ],
-		["w[0]+w.length", 1, function(w,y) { return w[0]+w.length; } ],
-		["w[0]+w[w.length-1]", 3, function(w,y) { return w[0]+w[w.length-1]; } ],
-		["w[0]+(w[y]||'')", 20, function(w,y) { return w[0]+(w[y]||''); } ],
-		["w[0]+[w[y]]", 20, function(w,y) { return w[0]+[w[y]]; } ],
-		["w[0]+w[1]+(w[y]||'')", 20, function(w,y) { return w[0]+w[1]+(w[y]||''); } ],
-		["w[0]+w[1]+[w[y]]", 20, function(w,y) { return w[0]+w[1]+[w[y]]; } ]
+		["w[x]", 0, 2, 0, 0, function(w,x,y) { return w[x]; } ],
+		["w[x]+w[y]", 0, 2, 0, 2, function(w,x,y) { return w[x]+w[y]; } ],
+		["w[x]+w.length", 0, 2, 0, 0, function(w,x,y) { return w[x]+w.length; } ],
+		["w[x]+w[w.length-1]", 0, 2, 0, 0, function(w,x,y) { return w[x]+w[w.length-1]; } ],
+		["w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[x]+[w[y]]; } ],
+		["w[0]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[0]+w[x]+[w[y]]; } ],
+		["w[1]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[1]+w[x]+[w[y]]; } ],
+		["w[2]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[2]+w[x]+[w[y]]; } ],
+		["w[0]+[w[x]]+[w[y]]", 3, 20, 3, 20, function(w,x,y) { return w[0]+[w[x]]+[w[y]]; } ],
+		["w.substr(x,3)", 0, 2, 0, 0, function(w,x,y) { return w.substr(x,3); } ]
 	];
 }
 
@@ -65,28 +64,33 @@ RegPack.prototype = {
 	 * Main entry point for RegPack
 	 */
 	runPacker : function(input, options) {
-                var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
-                var default_options = {
-                        withMath : false,
-                        hash2DContext : false,
-                        hashWebGLContext : false,
-                        hashAudioContext : false,
-                        contextVariableName : true,
-                        contextType : parseInt(0),
-                        reassignVars : true,
-                        varsNotReassigned : ['a', 'b', 'c'],
-                        crushGainFactor : parseFloat(2),
-                        crushLengthFactor : parseFloat(1),
-                        crushCopiesFactor : parseFloat(0),
-                        crushTiebreakerFactor : parseInt(1),
-						wrapInSetInterval : false,
-						timeVariableName : ""
-                };
-                for (var opt in default_options) {
-                    if (!(opt in options)) {
-                        options[opt] = default_options[opt];
-                    }
-                }
+		this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
+		this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
+		this.wrappedInit = '';	// code inside the unpacked routine
+
+
+		var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
+		var default_options = {
+			withMath : false,
+			hash2DContext : false,
+			hashWebGLContext : false,
+			hashAudioContext : false,
+			contextVariableName : true,
+			contextType : parseInt(0),
+			reassignVars : true,
+			varsNotReassigned : ['a', 'b', 'c'],
+			crushGainFactor : parseFloat(2),
+			crushLengthFactor : parseFloat(1),
+			crushCopiesFactor : parseFloat(0),
+			crushTiebreakerFactor : parseInt(1),
+			wrapInSetInterval : false,
+			timeVariableName : ""
+		};
+		for (var opt in default_options) {
+			if (!(opt in options)) {
+				options[opt] = default_options[opt];
+			}
+		}
 		this.preprocess(input, options);
 		for (var inputIndex=0; inputIndex < this.inputList.length; ++inputIndex)
 		{
@@ -680,7 +684,7 @@ RegPack.prototype = {
 		}
 
 		
-		var bestTotalScore = -999, bestIndex =-1, bestYValue = 0, bestScoreByContext = [];
+		var bestTotalScore = -999, bestIndex =-1, bestXValue = 0, bestYValue = 0, bestScoreByContext = [];
 		// For each hashing function, we compute the hashed names of all methods of the context object
 		// All collisions (such as taking the first letter of scale() and save() end up in s()) are eliminated
 		// as the order depends on the browser and we cannot assume the browser that will be running the final code
@@ -690,49 +694,59 @@ RegPack.prototype = {
 		//   - the length of the hashing function is subtracted
 		// Only the hashing function with the best score is kept - and applied
 		for (var functionIndex=0; functionIndex<this.hashFunctions.length; ++functionIndex) {
-			for (var yValue=1; yValue<=this.hashFunctions[functionIndex][1] ; ++yValue) {
-				var reverseLookup = [], forwardLookup = [];
-				for (w in reference) {	
-					var hashedName = this.hashFunctions[functionIndex][2].call(null, w, yValue);
-					reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
-				}
-				for (w in reverseLookup) {
-					forwardLookup[reverseLookup[w]]=w;	// keep only the method names with no collisions
-				}
-				var allScores = [], totalScore = 0;
-				for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
-				{
-					var score = 0;
-					var methodsInUse = methodsInUseByContext[contextIndex];
-					for (var methodIndex=0; methodIndex<methodsInUse.length; ++methodIndex) {
-						// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
-						// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
-						if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
-							score += methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
-						}
+			var functionDesc = this.hashFunctions[functionIndex];
+			for (var xValue=functionDesc[1]; xValue<=functionDesc[2] ; ++xValue) {
+				for (var yValue=functionDesc[3]; yValue<=functionDesc[4] ; ++yValue) {
+					var reverseLookup = [], forwardLookup = [];
+					for (w in reference) {	
+						var hashedName = functionDesc[5].call(null, w, xValue, yValue);
+						reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 					}
-					score -= 7; // c[hash]=c[i], "[hash]=" is packed for 1, remain "c" and "c[i]," total 1+1+5
-					score = Math.max(0, score); // if the gain is negative, no replacement will be performed
-					allScores.push(score); 
-					totalScore += score;
-				}
-				// the score for the hash is the gain as computed above,
-				// minus the length of the hash function itself.
-				totalScore-=this.hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
-								
-				if (totalScore>bestTotalScore) {
-					bestTotalScore = totalScore;
-					bestScoreByContext = allScores;
-					bestIndex = functionIndex;
-					bestYValue = yValue;
+					for (w in reverseLookup) {
+						forwardLookup[reverseLookup[w]]=w;	// keep only the method names with no collisions
+					}
+					var allScores = [], totalScore = 0;
+					for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+					{
+						var score = 0;
+						var methodsInUse = methodsInUseByContext[contextIndex];
+						for (var methodIndex=0; methodIndex<methodsInUse.length; ++methodIndex) {
+							// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
+							// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
+							if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
+								score += methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
+							}
+						}
+						score -= 7; // c[hash]=c[i], "[hash]=" is packed for 1, remain "c" and "c[i]," total 1+1+5
+						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
+						allScores.push(score); 
+						totalScore += score;
+					}
+					// the score for the hash is the gain as computed above,
+					// minus the length of the hash function itself.
+					totalScore-=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue).length;
+									
+					if (totalScore>bestTotalScore) {
+						bestTotalScore = totalScore;
+						bestScoreByContext = allScores;
+						bestIndex = functionIndex;
+						bestXValue = xValue;
+						bestYValue = yValue;
+					}
 				}
 			}
+		}
+		
+		// bail out early if no gain. Keep if just par, to see how compression behaves
+		if (bestTotalScore < 0) {
+			details += "Best hash loses "+(-bestTotalScore)+" bytes, skipping.\n";
+			return [this.getByteLength(input), input, details];
 		}
 		
 		// best hash function (based on byte gain) found. Apply it
 		var reverseLookup = [], forwardLookup = [];
 		for (w in reference) {	
-			var hashedName = this.hashFunctions[bestIndex][2].call(null, w, bestYValue);
+			var hashedName = this.hashFunctions[bestIndex][5].call(null, w, bestXValue, bestYValue);
 			reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 		}
 		for (w in reverseLookup) {
@@ -744,14 +758,14 @@ RegPack.prototype = {
 		var renamedList = "", notRenamedList = "";
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
 		{
-			if (bestScoreByContext[contextIndex]) {
+			if (bestScoreByContext[contextIndex]>=0) {
 				renamedList += (renamedList.length>0?", " : "") + objectNames[contextIndex];
 			} else {
 				notRenamedList += (notRenamedList.length>0?", " : "") + objectNames[contextIndex];
 			}
 		}
 		if (notRenamedList.length>0) {
-			details += "No renaming for "+notRenamedList+".\n";
+			details += "No renaming for "+notRenamedList+"\n";
 		}
 		if (renamedList.length>0) {
 			details += "Renamed methods for "+renamedList+"\n";
@@ -759,7 +773,7 @@ RegPack.prototype = {
 		
 		// Perform the replacement inside the code
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
-			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+			if (bestScoreByContext[contextIndex]>=0) {	// replace only if the gain is positive
 				var methodsInUse = methodsInUseByContext[contextIndex];
 				for (var methodIndex=0; methodIndex<methodsInUse.length; ++methodIndex) {
 				
@@ -813,17 +827,18 @@ RegPack.prototype = {
 
 		// Create the final hashing expression by replacing the placeholder variables
 		var expression = this.hashFunctions[bestIndex][0].replace(/w/g, indexName);
+		expression = expression.replace(/x/g, bestXValue);		
 		expression = expression.replace(/y/g, bestYValue);		
 		// If the input code uses mostly "" as string delimiters, use it as well in the expression instead of ''
 		if (input.split('"').length>input.split("'").length) {
 			expression = expression.replace(/'/g, '"');
 		}
 
-		// Determine where in the code the hashing loop wiil be inserted.
+		// Determine where in the code the hashing loop will be inserted.
 		// (at the declaration of the last context that gets hashed).
 		var offset = 0, loopContext = 0, shortestContext = 0;
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
-			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+			if (bestScoreByContext[contextIndex]>=0) {	// replace only if the gain is positive
 				offset = objectOffsets[contextIndex];	// perform the replacement at the latest context definition
 				loopContext = contextIndex;
 				// retrieve the context with the shortest name, will be used
@@ -845,7 +860,7 @@ RegPack.prototype = {
 		var declarationLength = objectDeclarationLengths[loopContext];
 		output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
-			if (bestScoreByContext[contextIndex]) {	
+			if (bestScoreByContext[contextIndex]>=0) {	
 				output+=objectNames[contextIndex]+"["+expression+"]=";
 				needsComma = true;
 			}
@@ -915,7 +930,7 @@ RegPack.prototype = {
 		}
 
 		
-		var bestTotalScore = -999, bestIndex =-1, bestYValue = 0, bestScoreByContext = [];
+		var bestTotalScore = -999, bestIndex =-1, bestYValue = 0, bestXValue = 0, bestScoreByContext = [];
 		// For each hashing function, we compute the hashed names of all properties of the context object
 		// All collisions (such as taking the first letter of scale() and save() end up in s()) are eliminated
 		// as the order depends on the browser and we cannot assume the browser that will be running the final code
@@ -925,55 +940,68 @@ RegPack.prototype = {
 		//   - the length of the hashing function is subtracted
 		// Only the hashing function with the best score is kept - and applied
 		for (var functionIndex=0; functionIndex<this.hashFunctions.length; ++functionIndex) {
-			for (var yValue=1; yValue<=this.hashFunctions[functionIndex][1] ; ++yValue) {
-				var reverseLookup = [], forwardLookup = [];
-				for (w in reference) {	
-					var hashedName = this.hashFunctions[functionIndex][2].call(null, w, yValue);
-					// a collision means that the hash is unsafe to use
-					//  - either another property/method is hashed to the same string
-					//  - or an unhashed method used in the code has the same name
-					//    (may happen for short names such as arc())
-					//    We do not care about methods not used in the code, they can be safely overwritten
-					var collision = propertiesInUse.indexOf(hashedName)!=-1 || reverseLookup[hashedName];
-					reverseLookup[hashedName] = (collision ? "<collision>" : w);
-				}
-				for (w in reverseLookup) {
-					forwardLookup[reverseLookup[w]]=w;	// keep only the property names with no collisions
-				}
-				var allScores = [], totalScore = 0;
-				for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
-				{
-					var score = 0;
-					var propertiesInUse = propertiesInUseByContext[contextIndex];
-					for (var propertyIndex=0; propertyIndex<propertiesInUse.length; ++propertyIndex) {
-						// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
-						// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
-						if (typeof(forwardLookup[propertiesInUse[propertyIndex]])=="string") {
-							score += propertiesInUse[propertyIndex].length - forwardLookup[propertiesInUse[propertyIndex]].length;
-						}
+			var functionDesc = this.hashFunctions[functionIndex];
+			for (var xValue=functionDesc[1]; xValue<=functionDesc[2] ; ++xValue) {
+				for (var yValue=functionDesc[3]; yValue<=functionDesc[4] ; ++yValue) {
+					var reverseLookup = [], forwardLookup = [];
+					for (w in reference) {	
+						var hashedName = functionDesc[5].call(null, w, xValue, yValue);
+						// a collision means that the hash is unsafe to use
+						//  - either another property/method is hashed to the same string
+						//  - or an unhashed method used in the code has the same name
+						//    (may happen for short names such as arc())
+						//    We do not care about methods not used in the code, they can be safely overwritten
+						var collision = propertiesInUse.indexOf(hashedName)!=-1 || reverseLookup[hashedName];
+						reverseLookup[hashedName] = (collision ? "<collision>" : w);
 					}
-					score -= 2; // c[hash]= "[hash]=" is packed for 1, remains "c", total 1+1
-					score = Math.max(0, score); // if the gain is negative, no replacement will be performed
-					allScores.push(score); 
-					totalScore += score;
-				}
-				// the score for the hash is the gain as computed above,
-				// minus the length of the hash function itself.
-				totalScore-=this.hashFunctions[functionIndex][0].replace(/y/g, yValue).length;
-								
-				if (totalScore>bestTotalScore) {
-					bestTotalScore = totalScore;
-					bestScoreByContext = allScores;
-					bestIndex = functionIndex;
-					bestYValue = yValue;
+					for (w in reverseLookup) {
+						forwardLookup[reverseLookup[w]]=w;	// keep only the property names with no collisions
+					}
+					var allScores = [], totalScore = 0;
+					for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
+					{
+						var score = 0;
+						var propertiesInUse = propertiesInUseByContext[contextIndex];
+						for (var propertyIndex=0; propertyIndex<propertiesInUse.length; ++propertyIndex) {
+							// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
+							// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
+							if (typeof(forwardLookup[propertiesInUse[propertyIndex]])=="string") {
+								score += propertiesInUse[propertyIndex].length - forwardLookup[propertiesInUse[propertyIndex]].length;
+							}
+						}
+						score -= 2; // c[hash]= "[hash]=" is packed for 1, remains "c", total 1+1
+						score = Math.max(0, score); // if the gain is negative, no replacement will be performed
+						allScores.push(score); 
+						totalScore += score;
+					}
+					// the score for the hash is the gain as computed above,
+					// minus the length of the hash function itself.
+					totalScore-=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue).length;
+					
+					//debug
+					details +=functionDesc[0].replace(/x/g, xValue).replace(/y/g, yValue) + " : "+totalScore +"\n";
+									
+					if (totalScore>bestTotalScore) {
+						bestTotalScore = totalScore;
+						bestScoreByContext = allScores;
+						bestIndex = functionIndex;
+						bestXValue = xValue;
+						bestYValue = yValue;
+					}
 				}
 			}
+		}
+
+		// bail out early if no gain
+		if (bestTotalScore < 0) {
+			details += "Best hash loses "+(-bestTotalScore)+" bytes, skipping.\n";
+			return [this.getByteLength(input), input, details];
 		}
 		
 		// best hash function (based on byte gain) found. Apply it
 		var reverseLookup = [], forwardLookup = [];
 		for (w in reference) {	
-			var hashedName = this.hashFunctions[bestIndex][2].call(null, w, bestYValue);
+			var hashedName = this.hashFunctions[bestIndex][5].call(null, w, bestXValue, bestYValue);
 			reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 		}
 		for (w in reverseLookup) {
@@ -985,14 +1013,14 @@ RegPack.prototype = {
 		var renamedList = "", notRenamedList = "";
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
 		{
-			if (bestScoreByContext[contextIndex]) {
+			if (bestScoreByContext[contextIndex]>=0) {
 				renamedList += (renamedList.length>0?", " : "") + objectNames[contextIndex];
 			} else {
 				notRenamedList += (notRenamedList.length>0?", " : "") + objectNames[contextIndex];
 			}
 		}
 		if (notRenamedList.length>0) {
-			details += "No renaming for "+notRenamedList+".\n";
+			details += "No renaming for "+notRenamedList+"\n";
 		}
 		if (renamedList.length>0) {
 			details += "Renamed properties for "+renamedList+"\n";
@@ -1011,7 +1039,7 @@ RegPack.prototype = {
 		
 		// Perform the replacement inside the code
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
-			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+			if (bestScoreByContext[contextIndex]>=0) {	// replace only if the gain is positive
 				var propertiesInUse = propertiesInUseByContext[contextIndex];
 				for (var propertyIndex=0; propertyIndex<propertiesInUse.length; ++propertyIndex) {
 				
@@ -1065,6 +1093,7 @@ RegPack.prototype = {
 
 		// Create the final hashing expression by replacing the placeholder variables
 		var expression = this.hashFunctions[bestIndex][0].replace(/w/g, indexName);
+		expression = expression.replace(/x/g, bestXValue);		
 		expression = expression.replace(/y/g, bestYValue);		
 		// If the input code uses mostly "" as string delimiters, use it as well in the expression instead of ''
 		if (input.split('"').length>input.split("'").length) {
@@ -1075,7 +1104,7 @@ RegPack.prototype = {
 		// (at the declaration of the last context that gets hashed).
 		var offset = 0, loopContext = 0;
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
-			if (bestScoreByContext[contextIndex]) {	// replace only if the gain is positive
+			if (bestScoreByContext[contextIndex]>=0) {	// replace only if the gain is positive
 				offset = objectOffsets[contextIndex];	// perform the replacement at the latest context definition
 				loopContext = contextIndex;
 			}
