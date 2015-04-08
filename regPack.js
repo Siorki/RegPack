@@ -67,6 +67,7 @@ RegPack.prototype = {
 		this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
 		this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
 		this.wrappedInit = '';	// code inside the unpacked routine
+		this.initialDeclarationOffset = 0; // offset for 2D/GL context provided by shim
 
 
 		var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
@@ -340,7 +341,11 @@ RegPack.prototype = {
 				// wrap the initialization code into a conditional sequence :
 				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
 				//   - if(!t++){/*init code*/} if it is created only for the test
-				initCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){"+paramsCode+initCode+finalCode+"}";
+				var wrapperCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){";
+				// Redefine the "zero offset" of our transformed code,
+				// used to hash methods/properties of contexts provided by shim
+				this.initialDeclarationOffset = wrapperCode.length;
+				initCode=wrapperCode+paramsCode+initCode+finalCode+"}";
 				output = initCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				
 				this.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
@@ -381,7 +386,7 @@ RegPack.prototype = {
 		if (variableName)
 		{
 			objectNames.push(variableName);
-			objectOffsets.push(0);
+			objectOffsets.push(this.initialDeclarationOffset);
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
@@ -450,7 +455,7 @@ RegPack.prototype = {
 		if (variableName)
 		{
 			objectNames.push(variableName);
-			objectOffsets.push(0);
+			objectOffsets.push(this.initialDeclarationOffset);
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
