@@ -225,8 +225,8 @@ RegPack.prototype = {
 	 * [refactored code size, refactored code, information log]
 	 * 
 	 * @param input the code to refactor
-	 * @param timeVariableName the variable containing time, or empty
-	 * @param varsNotReassigned boolean array[128], true to avoid altering variable
+	 * @param timeVariableName (from options) the variable containing time, or empty string
+	 * @param varsNotReassigned (from options) boolean array[128], true to avoid altering variable
 	 * @return result of refactoring
 	 * 
 	 */
@@ -795,35 +795,10 @@ RegPack.prototype = {
 		}
 		details += "\n";
 		
-		// Choose the index variable for the added hashing code
-		// The algorithm counts every instance of "for(*" with individual letters replacing the star
-		// then chooses the letter with the most matches, in order to benefit most from compression
-		details+='Loop variables :\n';
-		var indexMatches = new Array(128) ;
-		var loopIndexRegExp = /for\((\w)/g;
-		var loopIndexResult=loopIndexRegExp.exec(input);
-		while (loopIndexResult) {	// get a set with a unique entry for each method
-			var code = loopIndexResult[1].charCodeAt(0);
-			if (!varsNotReassigned[code]) {
-				indexMatches[code] = (indexMatches[code]||0)+1;
-			}
-			loopIndexResult=loopIndexRegExp.exec(input);
-		}
-		var indexName="i"; // default name
-		var maxMatches = 0;
-		for (var i=0; i<128; ++i) {
-			if (indexMatches[i]>maxMatches) {
-				maxMatches = indexMatches[i];
-				indexName = String.fromCharCode(i);
-			}
-		}
-		for (var i=0; i<128; ++i) {
-			if (indexMatches[i]) {
-				details += String.fromCharCode(i)+" *"+indexMatches[i]+(indexName == String.fromCharCode(i)?" <-- selected":"")+"\n";
-			}
-		}
-		details += "\n";
-		
+		// Choose the index variable for the hashing loop
+		var loopVarResult = this.getMostFrequentLoopVariable(input, varsNotReassigned);
+		var indexName = loopVarResult[0];
+		details += loopVarResult[1]; // operation log		
 
 		// Create the final hashing expression by replacing the placeholder variables
 		var expression = this.hashFunctions[bestIndex][0].replace(/w/g, indexName);
@@ -1060,35 +1035,10 @@ RegPack.prototype = {
 		}
 		details += "\n";
 		
-		// Choose the index variable for the added hashing code
-		// The algorithm counts every instance of "for(*" with individual letters replacing the star
-		// then chooses the letter with the most matches, in order to benefit most from compression
-		details+='Loop variables :\n';
-		var indexMatches = new Array(128) ;
-		var loopIndexRegExp = /for\((\w)/g;
-		var loopIndexResult=loopIndexRegExp.exec(input);
-		while (loopIndexResult) {	// get a set with a unique entry for each property
-			var code = loopIndexResult[1].charCodeAt(0);
-			if (!varsNotReassigned[code]) {
-				indexMatches[code] = (indexMatches[code]||0)+1;
-			}
-			loopIndexResult=loopIndexRegExp.exec(input);
-		}
-		var indexName="i"; // default name
-		var maxMatches = 0;
-		for (var i=0; i<128; ++i) {
-			if (indexMatches[i]>maxMatches) {
-				maxMatches = indexMatches[i];
-				indexName = String.fromCharCode(i);
-			}
-		}
-		for (var i=0; i<128; ++i) {
-			if (indexMatches[i]) {
-				details += String.fromCharCode(i)+" *"+indexMatches[i]+(indexName == String.fromCharCode(i)?" <-- selected":"")+"\n";
-			}
-		}
-		details += "\n";
-		
+		// Choose the index variable for the hashing loop
+		var loopVarResult = this.getMostFrequentLoopVariable(input, varsNotReassigned);
+		var indexName = loopVarResult[0];
+		details += loopVarResult[1]; // operation log		
 
 		// Create the final hashing expression by replacing the placeholder variables
 		var expression = this.hashFunctions[bestIndex][0].replace(/w/g, indexName);
@@ -1160,6 +1110,60 @@ RegPack.prototype = {
 	isDigit : function (charCode)
 	{
 		return (charCode>47 && charCode<58);
+	},
+	
+	/**
+	 * Identifies and returns the one-letter variable that is the
+	 * most common occurrence as a loop variable in a for(..;..;..) loop
+	 *
+	 * If no loop is found in the code, returns "i" as default.
+	 * Protected variables (from param varsNotReassigned) are not counted
+	 * as they should not be reassigned (issue #9), as the goal is to
+	 * create another for loop using the same variabled.
+	 *
+	 * Called by both hashing methods to assign a name to the 
+	 * renaming loop, in order to benefit most from compression.
+	 * @see renameObjectMethods
+	 * @see hashObjectProperties
+	 *
+	 * @param input the code to parse for loop variables
+	 * @param varsNotReassigned (from options) boolean array[128], true to avoid altering variable
+	 * @return an array [ variable name (String), log ]
+	 */
+	getMostFrequentLoopVariable : function(input, varsNotReassigned)
+	{
+			// Choose the index variable for the added hashing code
+		// The algorithm counts every instance of "for(*" with individual letters replacing the star
+		// then chooses the letter with the most matches, in order to benefit most from compression
+		var log ="Loop variables :\n";
+		var indexMatches = new Array(128) ;
+		var loopIndexRegExp = /for\((\w)/g;
+		var loopIndexResult=loopIndexRegExp.exec(input);
+		while (loopIndexResult) {	// get a set with a unique entry for each property
+			var code = loopIndexResult[1].charCodeAt(0);
+			if (!varsNotReassigned[code]) {	// issue #9 : skip protected variable
+				indexMatches[code] = (indexMatches[code]||0)+1;
+			}
+			loopIndexResult=loopIndexRegExp.exec(input);
+		}
+		var indexName="i"; // default name
+		var maxMatches = 0;
+		for (var i=0; i<128; ++i) {
+			if (indexMatches[i]>maxMatches) {
+				maxMatches = indexMatches[i];
+				indexName = String.fromCharCode(i);
+			}
+		}
+		for (var i=0; i<128; ++i) {
+			if (indexMatches[i]) {
+				log += String.fromCharCode(i)+" *"+indexMatches[i]+(indexName == String.fromCharCode(i)?" <-- selected":"")+"\n";
+			}
+		}
+		if (maxMatches == 0) {
+			log += "No relevant loop found, defaulting to "+indexName+"\n";
+		}
+		log += "\n";
+		return [ indexName, log ];
 	},
 	
 	/**
