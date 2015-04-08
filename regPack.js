@@ -1020,12 +1020,13 @@ RegPack.prototype = {
 					// Fix for issue #11, needed in this iteration again
 					if (typeof(forwardLookup[propertiesInUse[propertyIndex]])=="string") {
 						// replace all instances of that property ("g" option in the RegExp)
-						// The opening bracket at the end avoids triggering on a subset of the name,
+						// The nonstring character at the end avoids triggering on a subset of the name,
 						// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
+						// (see test case webglContext_substringHash.js)
 						// The initial character (or line start) avoids triggering if one context has a name
 						// ending in another context's name (such as 'c' and 'cc')
-						var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+propertiesInUse[propertyIndex],"g");						
-						hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"["+objectNames[shortestContext]+"."+forwardLookup[propertiesInUse[propertyIndex]]+"]");
+						var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+propertiesInUse[propertyIndex]+"($|\\W)","g");						
+						hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"["+objectNames[shortestContext]+"."+forwardLookup[propertiesInUse[propertyIndex]]+"]$2");
 
 						// show the renaming in the details, for used properties only
 						details += objectNames[contextIndex]+"."+forwardLookup[propertiesInUse[propertyIndex]] + " -> " + propertiesInUse[propertyIndex] + "\n";
