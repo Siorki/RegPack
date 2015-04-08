@@ -234,7 +234,7 @@ RegPack.prototype = {
 		var output = input;
 		var details = "----------- Refactoring to run with setInterval() ---------------\n";
 		var timeVariableProvided = true;
-		var loopMatch = input.match(/setInterval\(function\(([\w\d.=]*)\){/);
+		var loopMatch = input.match(/setInterval\(function\(([\w\d.=,]*)\){/);
 		if (loopMatch) {
 			var initCode = input.substr(0, loopMatch.index);
 			// remove any trailing comma or semicolon			
@@ -243,6 +243,24 @@ RegPack.prototype = {
 			}
 			
 			details += "First "+loopMatch.index+" bytes moved to conditional sequence.\n";
+			
+			// parameters of the function passed to setInterval() :
+			// remove declarations without assignment
+			var paramsCode = loopMatch[1];
+			var paramsExp = /[\w\d$_]*,|$/;
+		
+			var paramsMatch = paramsExp.exec(paramsCode);
+			while (paramsMatch[0] != "") {
+				paramsCode = paramsCode.substr(0, paramsMatch.index)+paramsCode.substr(paramsMatch.index+paramsMatch[0].length);
+				paramsMatch = paramsExp.exec(paramsCode);
+			}
+			// remove the last variable (without the comma)
+			paramsMatch = paramsCode.match(/^[\w\d$_]*$/);
+			if (paramsMatch[0] == paramsCode) {
+				paramsCode = "";
+			}
+			// if not empty, add a semicolon
+			paramsCode += (paramsCode != "" ? ";" : "");
 			
 			if (timeVariableName=="") {
 				timeVariableProvided = false;
@@ -322,7 +340,7 @@ RegPack.prototype = {
 				// wrap the initialization code into a conditional sequence :
 				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
 				//   - if(!t++){/*init code*/} if it is created only for the test
-				initCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){"+loopMatch[1]+initCode+finalCode+"}";
+				initCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){"+paramsCode+initCode+finalCode+"}";
 				output = initCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				
 				this.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
