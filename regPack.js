@@ -350,6 +350,15 @@ RegPack.prototype = {
 				
 				this.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
 				this.wrappedInit = timeVariableName+'=0';
+				
+				// Special case : the assignment of the time variable is done
+				// as a parameter of setInterval()
+				// (featured in 2012 - A rose is a rose)
+				if (delayMatch[1].indexOf(this.wrappedInit) != -1) {
+					// in this case, no need to declare the variable again
+					this.wrappedInit = "";
+					details += timeVariableName+" initialized as parameter to setInterval, kept as is.\n";
+				}
 			 } else {	// delayMatch === false
 				details += "Unable to find delay for setInterval, module skipped.\n";
 			}
@@ -1415,10 +1424,14 @@ RegPack.prototype = {
 		}
 		details += formerVariableCharList.length?"Renaming variables : \n":"No variables to rename.\n";
 		var output = input;
+		// Perform the replacement inside all relevant strings
 		for (var i=0; i<formerVariableCharList.length; ++i)
 		{
-			var oldChar = formerVariableCharList[i];
-			output = output.split(formerVariableCharList[i]).join(availableCharList[i]);
+			var exp = new RegExp("(^|[^\\w\\d$])"+formerVariableCharList[i],"g");						
+			output = output.replace(exp, "$1"+availableCharList[i]);
+			// Perform the replacement on the code appended by refactorToSetInterval()
+			this.interpreterCall = this.interpreterCall.replace(exp, "$1"+availableCharList[i]);
+			this.wrappedInit = this.wrappedInit.replace(exp, "$1"+availableCharList[i]);
 			details += "  "+formerVariableCharList[i]+ " => "+availableCharList[i]+"\n";
 		}
 		
