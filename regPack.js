@@ -68,7 +68,7 @@ RegPack.prototype = {
 		this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
 		this.wrappedInit = '';	// code inside the unpacked routine
 		this.initialDeclarationOffset = 0; // offset for 2D/GL context provided by shim
-
+		this.packedCodeVarName='_'; // name of the variable created to hold the packed code
 
 		var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
 		var default_options = {
@@ -1427,13 +1427,21 @@ RegPack.prototype = {
 		// Perform the replacement inside all relevant strings
 		for (var i=0; i<formerVariableCharList.length; ++i)
 		{
-			var exp = new RegExp("(^|[^\\w\\d$])"+formerVariableCharList[i],"g");						
+			var oldVarName = formerVariableCharList[i];
+			var exp = new RegExp("(^|[^\\w\\d$_])"+(oldVarName=="$"?"\\":"")+oldVarName,"g");						
 			output = output.replace(exp, "$1"+availableCharList[i]);
 			// Perform the replacement on the code appended by refactorToSetInterval()
 			this.interpreterCall = this.interpreterCall.replace(exp, "$1"+availableCharList[i]);
 			this.wrappedInit = this.wrappedInit.replace(exp, "$1"+availableCharList[i]);
-			details += "  "+formerVariableCharList[i]+ " => "+availableCharList[i]+"\n";
+			
+			// replace the packed code holder definition and usage as well
+			// (some code is designed to reuse the string - see JsCrush or Impossible Road)
+			if (formerVariableCharList[i]==this.packedCodeVarName) {
+				this.packedCodeVarName = availableCharList[i];
+			}
+			details += "  "+oldVarName+ " => "+availableCharList[i]+"\n";
 		}
+		
 		
 		return [output, details];
 	},
@@ -1506,7 +1514,7 @@ RegPack.prototype = {
 		}
 			
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i='_='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with(_.split(g[i]))_=join(pop('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		i=this.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with('+this.packedCodeVarName+'.split(g[i]))'+this.packedCodeVarName+'=join(pop('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 
@@ -1684,8 +1692,8 @@ RegPack.prototype = {
 		// add the unpacking code to the compressed string
 		var checkedString = regPackOutput;
 		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		regPackOutput='for(_='+B+regPackOutput.replace(c,'\\'+B)+B;
-		regPackOutput+=';g=/['+tokenString+']/.exec(_);)with(_.split(g))_=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		regPackOutput='for('+this.packedCodeVarName+'='+B+regPackOutput.replace(c,'\\'+B)+B;
+		regPackOutput+=';g=/['+tokenString+']/.exec('+this.packedCodeVarName+');)with('+this.packedCodeVarName+'.split(g))'+this.packedCodeVarName+'=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		
 		var resultSize = this.getByteLength(regPackOutput);
 		
@@ -1948,8 +1956,8 @@ RegPack.prototype = {
 		// add the unpacking code to the compressed string
 		var checkedString = thirdStageOutput;
 		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		thirdStageOutput='for(_='+B+thirdStageOutput.replace(c,'\\'+B)+B;
-		thirdStageOutput+=';g=/['+regExpString+']/.exec(_);)with(_.split(g))_=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		thirdStageOutput='for('+this.packedCodeVarName+'='+B+thirdStageOutput.replace(c,'\\'+B)+B;
+		thirdStageOutput+=';g=/['+regExpString+']/.exec('+this.packedCodeVarName+');)with('+this.packedCodeVarName+'.split(g))'+this.packedCodeVarName+'=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
 		
 		var resultSize = this.getByteLength(thirdStageOutput);
 		
