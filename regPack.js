@@ -12,28 +12,76 @@ function cmdRegPack(input, options) {
 	
 	var bestMethod=0, bestCompression=1e8;
 	for (var i=0; i<methodCount; ++i) {
+		var packerData = packer.inputList[i];
 		for (var j=0; j<4; ++j) {
-			if (packer.inputList[i][j+1][0] < bestCompression) {
-				bestCompression = packer.inputList[i][j+1][0];
+			var output = (j==0 ? packerData.contents : packerData.result[j-1][1]);
+			var packedLength = packer.getByteLength(output);
+			if (packedLength < bestCompression) {
+				bestCompression = packedLength;
 				bestMethod = i;
 			} 
 		}
 	}
 
-        var bestVal = "";
-        var mes = "";
+	var bestVal = "";
+	var mes = "";
 	for (var j=0; j<3; ++j) {
-		var stage = j<2 ? j+1 : (packer.inputList[bestMethod][3][0]< packer.inputList[bestMethod][4][0] ? 3 : 4);
-                if( bestCompression==packer.inputList[bestMethod][stage][0] ) {
-                        bestVal =  packer.inputList[bestMethod][stage][1];
-                        mes = resultMessage(packer.originalLength, packer.inputList[bestMethod][stage][0]);
-                }
+		var stage = j<2 ? j-1 : (packer.getByteLength(bestOutput.result[1][1])< packer.getByteLength(bestOutput.result[2][1]) ? 1 : 2);
+		var output = (stage<0 ?  bestOutput.contents : bestOutput.result[stage][1]);
+		var outputLength = packer.getByteLength(output);
+		if (bestCompression == outputLength) {
+			bestVal = output;
+			mes = resultMessage(packer.originalLength, outputLength);
+		}
 	}
-        //console.log("packer:", packer.inputList[bestMethod]);
-        console.warn("stats:", mes);
-        return bestVal;
+	//console.log("packer:", packer.inputList[bestMethod]);
+	console.warn("stats:", mes);
+	return bestVal;
 }
 
+/**
+ * @constructor
+ * The PackerData class holds actual data :
+ *  - string to pack, in the current preprocessing / compression stage
+ *  - produced log
+ * It also holds internal settings set by the preprocessor
+ * and exploited by the packer :
+ *  - name of the variable containing the packed code
+ *  - generated initialization code
+ *  - execution environment
+ *  - ..
+ *
+ * There is one instance for each branch of input (from inputList)
+ * as the preprocessing may diverge : different renamings, environments ..
+ *
+ * @param name The name of the branch, summing the operations performed
+ * @param dataString The input string to pack
+ */
+function PackerData(name, dataString) {
+	this.name = name; // trace of the modules that were applied
+	this.contents = dataString; // string to pack
+	this.log = ''; // log, as shown in the right column in the interactive version
+	this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
+	this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
+	this.wrappedInit = '';	// code inside the unpacked routine
+	this.initialDeclarationOffset = 0; // offset for 2D/GL context provided by shim
+	this.packedCodeVarName='_'; // name of the variable created to hold the packed code
+	this.result= new Array;
+}
+
+function clonePackerData(packerData, nameSuffix, newContents, newLog) {
+	var clone = new PackerData;
+	clone.name = packerData.name + nameSuffix;
+	clone.contents = newContents;
+	clone.log = newLog;
+	clone.environment = packerData.environment;
+	clone.interpreterCall = packerData.interpreterCall;
+	clone.wrappedInit = packerData.wrappedInit;
+	clone.initialDeclarationOffset = packerData.initialDeclarationOffset;
+	clone.packedCodeVarName = packerData.packedCodeVarName;
+	clone.result = new Array;
+	return clone;
+}
 
 function RegPack() {
 	this.matchesLookup = [];
@@ -44,13 +92,13 @@ function RegPack() {
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
 		["w[x]", 0, 2, 0, 0, function(w,x,y) { return w[x]; } ],
-		["w[x]+w[y]", 0, 2, 0, 2, function(w,x,y) { return w[x]+w[y]; } ],
+		["w[x]+w[y]", 0, 2, 0, 20, function(w,x,y) { return w[x]+w[y]; } ],
 		["w[x]+w.length", 0, 2, 0, 0, function(w,x,y) { return w[x]+w.length; } ],
 		["w[x]+w[w.length-1]", 0, 2, 0, 0, function(w,x,y) { return w[x]+w[w.length-1]; } ],
 		["w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[x]+[w[y]]; } ],
-		["w[0]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[0]+w[x]+[w[y]]; } ],
-		["w[1]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[1]+w[x]+[w[y]]; } ],
-		["w[2]+w[x]+[w[y]]", 0, 2, 3, 20, function(w,x,y) { return w[2]+w[x]+[w[y]]; } ],
+		["w[0]+w[x]+[w[y]]", 0, 20, 3, 20, function(w,x,y) { return w[0]+w[x]+[w[y]]; } ],
+		["w[1]+w[x]+[w[y]]", 0, 20, 3, 20, function(w,x,y) { return w[1]+w[x]+[w[y]]; } ],
+		["w[2]+w[x]+[w[y]]", 0, 20, 3, 20, function(w,x,y) { return w[2]+w[x]+[w[y]]; } ],
 		["w[0]+[w[x]]+[w[y]]", 3, 20, 3, 20, function(w,x,y) { return w[0]+[w[x]]+[w[y]]; } ],
 		["w.substr(x,3)", 0, 2, 0, 0, function(w,x,y) { return w.substr(x,3); } ]
 	];
@@ -64,12 +112,7 @@ RegPack.prototype = {
 	 * Main entry point for RegPack
 	 */
 	runPacker : function(input, options) {
-		this.environment = '';	// execution environment for unpacked code. Can become 'with(...)'
-		this.interpreterCall = 'eval(_)';	// call to be performed on unpacked code.
-		this.wrappedInit = '';	// code inside the unpacked routine
-		this.initialDeclarationOffset = 0; // offset for 2D/GL context provided by shim
-		this.packedCodeVarName='_'; // name of the variable created to hold the packed code
-
+		// clear leading/trailing blanks and one-liner comments
 		var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
 		var default_options = {
 			withMath : false,
@@ -92,22 +135,22 @@ RegPack.prototype = {
 				options[opt] = default_options[opt];
 			}
 		}
-		this.preprocess(input, options);
+		this.inputList = this.preprocess(input, options);
 		for (var inputIndex=0; inputIndex < this.inputList.length; ++inputIndex)
 		{
-			this.input = this.inputList[inputIndex][1][1].replace(/\\/g,'\\\\');
+			var currentData = this.inputList[inputIndex];
 			
 			// first stage : configurable crusher
-			var output = this.findRedundancies(options);
-			this.inputList[inputIndex].push(output);
+			var output = this.findRedundancies(currentData, options);
+			currentData.result.push(output);
 			
 			// second stage : convert token string to regexp
-			output = packer.packToRegexpCharClass(options);
-			this.inputList[inputIndex].push(output);
+			output = this.packToRegexpCharClass(currentData, options);
+			currentData.result.push(output);
 			
 			// third stage : try a negated regexp instead
-			output = packer.packToNegatedRegexpCharClass();
-			this.inputList[inputIndex].push(output);
+			output = this.packToNegatedRegexpCharClass(currentData);
+			currentData.result.push(output);
 			
 			
 		}
@@ -136,17 +179,17 @@ RegPack.prototype = {
 	preprocess : function(input, options) {
 		this.originalInput = input;
 		this.originalLength = this.getByteLength(input);
+		
+		var inputData = new PackerData ('', input);
 		if (options.withMath) {
-			input = input.replace(/Math\./g, '');
-			this.environment = 'with(Math)';
+			inputData.contents = input.replace(/Math\./g, '');
+			inputData.environment = 'with(Math)';
 		}
 		
-		var inputList = [];
+		var inputList = [ inputData ];
 		if (options.wrapInSetInterval) {
-			var refactored = this.refactorToSetInterval(input, options.timeVariableName, options.varsNotReassigned);
-			inputList.push(["", refactored]);
-		} else {
-			inputList.push(["", [this.getByteLength(input), input, ""]]);
+			// method stores the refactored code, log and setup change in inputData
+			this.refactorToSetInterval(inputData, options);
 		}
 		
 		
@@ -159,10 +202,13 @@ RegPack.prototype = {
 			var context = canvas.getContext("2d");
 			for (var count=inputList.length, i=0; i<count; ++i)
 			{
-				var result = this.preprocess2DContext(inputList[i][1][1], (options.contextType==0?options.contextVariableName:false), context, options.varsNotReassigned, inputList[i][1][2]);
+				var result = this.preprocess2DContext(inputList[i], options, context);
 				if (result) {
-					inputList.push([inputList[i][0]+" 2D(methods)", result[0]]);
-					inputList.push([inputList[i][0]+" 2D(properties)", result[1]]);
+					var methodHashedData = clonePackerData(inputList[i], " 2D(methods)", result[0][1], result[0][2]);
+					inputList.push(methodHashedData);
+					
+					var propertyHashedData = clonePackerData(inputList[i], " 2D(properties)", result[1][1], result[1][2]);
+					inputList.push(propertyHashedData);
 				}
 			}
 		}
@@ -176,11 +222,16 @@ RegPack.prototype = {
 			var context = canvas.getContext("experimental-webgl");
 			for (var count=inputList.length, i=0; i<count; ++i)
 			{
-				var result = this.preprocessWebGLContext(inputList[i][1][1], (options.contextType==1?options.contextVariableName:false), context, options.varsNotReassigned, inputList[i][1][2]);
+				var result = this.preprocessWebGLContext(inputList[i], options, context);
 				if (result) {
-					inputList.push([inputList[i][0]+" WebGL(methods)", result[0]]);
-					inputList.push([inputList[i][0]+" WebGL(methods+constants)", result[1]]);
-					inputList.push([inputList[i][0]+" WebGL(properties)", result[2]]);
+					var methodHashedData = clonePackerData(inputList[i], " WebGL(methods)", result[0][1], result[0][2]);
+					inputList.push(methodHashedData);
+					
+					var constantHashedData = clonePackerData(inputList[i], " WebGL(methods+constants)", result[1][1], result[1][2]);
+					inputList.push(constantHashedData);
+
+					var propertyHashedData = clonePackerData(inputList[i], " WebGL(properties)", result[2][1], result[2][2]);
+					inputList.push(propertyHashedData);
 				}
 			}
 		}
@@ -190,23 +241,23 @@ RegPack.prototype = {
 			var context = new AudioContext;
 			for (var count=inputList.length, i=0; i<count; ++i) 
 	 		{
-				var result = this.preprocessAudioContext(inputList[i][1][1], context, options.varsNotReassigned, inputList[i][1][2]);
+				var result = this.preprocessAudioContext(inputList[i].contents, context, options.varsNotReassigned, inputList[i].log);
 				if (result) {
-					inputList.push([inputList[i][0]+" Audio", result]);
+					var audioHashedData = clonePackerData(inputList[i], " Audio", result[1], result[2]);
+					inputList.push(audioHashedData);
 				}	
 			}
 		}
-		inputList[0][0]="unhashed";
+		inputList[0].name="unhashed";
 		
 		if (options.reassignVars)
 		{
 			for (var i=0; i<inputList.length; ++i) {
-				var result = this.reassignVariableNames(inputList[i][1][1], options.varsNotReassigned);
-				inputList[i][1][1] = result[0];
-				inputList[i][1][2] += result[1];
+				// method stores the refactored code, log and setup change in inputList[i]
+				this.reassignVariableNames(inputList[i], options);
 			}
 		}
-		this.inputList = inputList;
+		return inputList;
 	},
 
 	/**
@@ -219,20 +270,25 @@ RegPack.prototype = {
 	 *
 	 * The method makes use of a "time" variable that usually controls
 	 * the flow of execution/rendering, and is increased at each loop.
-	 * It only needs to be zero on the first run to trigger the initialization
+	 * It needs to be zero on the first run to trigger the initialization
 	 * sequence, then nonzero on the subsequent runs.
 	 *
-	 * Returns an array 
-	 * [refactored code size, refactored code, information log]
+	 * Output (refactored code and log) is stored in parameter inputData.
+	 * Setup for the unpacking routine is also changed in the same object.
 	 * 
-	 * @param input the code to refactor
-	 * @param timeVariableName (from options) the variable containing time, or empty string
-	 * @param varsNotReassigned (from options) boolean array[128], true to avoid altering variable
-	 * @return result of refactoring
+	 * @param inputData (in/out) PackerData structure containing the code to refactor and setup 
+	 * @param options options set, see below for use details
+	 * @return nothing. Result of refactoring is stored in parameter inputData.
+	 * Options used are :
+	 *  - timeVariableName : the variable containing time, or empty string to allocate one
+	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
 	 * 
 	 */
-	refactorToSetInterval : function(input, timeVariableName, varsNotReassigned) {
-		var output = input;
+	refactorToSetInterval : function(inputData, options) {
+		var input = inputData.contents;
+		var output = input; // initialized from input, in case we bail out early
+		var timeVariableName = options.timeVariableName;
+		var varsNotReassigned = options.varsNotReassigned;
 		var details = "----------- Refactoring to run with setInterval() ---------------\n";
 		var timeVariableProvided = true;
 		var loopMatch = input.match(/setInterval\(function\(([\w\d.=,]*)\){/);
@@ -342,21 +398,21 @@ RegPack.prototype = {
 				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
 				//   - if(!t++){/*init code*/} if it is created only for the test
 				var wrapperCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){";
-				// Redefine the "zero offset" of our transformed code,
+				// Redefine the "offset zero" of our transformed code,
 				// used to hash methods/properties of contexts provided by shim
-				this.initialDeclarationOffset = wrapperCode.length;
+				inputData.initialDeclarationOffset = wrapperCode.length;
 				initCode=wrapperCode+paramsCode+initCode+finalCode+"}";
 				output = initCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				
-				this.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
-				this.wrappedInit = timeVariableName+'=0';
+				inputData.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
+				inputData.wrappedInit = timeVariableName+'=0';
 				
 				// Special case : the assignment of the time variable is done
 				// as a parameter of setInterval()
 				// (featured in 2012 - A rose is a rose)
-				if (delayMatch[1].indexOf(this.wrappedInit) != -1) {
+				if (delayMatch[1].indexOf(inputData.wrappedInit) != -1) {
 					// in this case, no need to declare the variable again
-					this.wrappedInit = "";
+					inputData.wrappedInit = "";
 					details += timeVariableName+" initialized as parameter to setInterval, kept as is.\n";
 				}
 			 } else {	// delayMatch === false
@@ -367,7 +423,10 @@ RegPack.prototype = {
 			details += "setInterval() loop not found, module skipped.\n";
 		}
 		details += "\n";
-		return [output.length, output, details];
+		
+		// output stored in inputData parameter instead of being returned
+		inputData.contents = output;
+		inputData.log += details;
 	},	
 	
 	/**
@@ -380,22 +439,28 @@ RegPack.prototype = {
 	 * even if the preprocessing actually lenghtened the string.
 	 * 
 	 *
-	 * @param input the code to preprocess
-	 * @param variableName the variable holding the context if defined outside of the input (shim), false otherwise
+	 * @param inputData (in/out) PackerData structure containing setup data and the code to preprocess
+	 * @param options options set, see below for use details
+	 * Options used are :
+	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
+	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
+	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
 	 * @param context an instance of a canvas 2d context, to list method names
-	 * @param varsNotReassigned boolean array[128], true to keep name of variable
-	 * @param initialLog : the action log, new logs will be appended	 
 	 * @return the result array, or false if no 2d context definition is found in the code.
 	 */
-	preprocess2DContext : function(input, variableName, context, varsNotReassigned, initialLog) {
+	preprocess2DContext : function(inputData, options, context) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		var input = inputData.contents;
+		var initialLog = inputData.log;
+		var variableName = (options.contextType==0?options.contextVariableName:false);
+		var varsNotReassigned = options.varsNotReassigned;
 		initialLog += "----------- Hashing methods/properties for 2D context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
 			objectNames.push(variableName);
-			objectOffsets.push(this.initialDeclarationOffset);
+			objectOffsets.push(inputData.initialDeclarationOffset);
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
@@ -449,22 +514,28 @@ RegPack.prototype = {
 	 *  - second one has method hashing + GL constants replaced by their value
 	 *  - third one has method + property renaming
 	 *
-	 * @param input the code to preprocess
-	 * @param variableName the variable holding the context if defined outside of the input (shim), false otherwise
+	 * @param inputData (in/out) PackerData structure containing setup data and the code to preprocess
+	 * @param options options set, see below for use details
+	 * Options used are :
+	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
+	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
+	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
 	 * @param context an instance of a canvas webgl context, to list method names
-	 * @param varsNotReassigned boolean array[128], true to keep name of variable
-	 * @param initialLog : the action log, new logs will be appended	 
 	 * @return the result array, or false if no webgl context definition is found in the code.
 	 */
-	preprocessWebGLContext : function(input, variableName, context, varsNotReassigned, initialLog) {
+	preprocessWebGLContext : function(inputData, options, context) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
+		var input = inputData.contents;
+		var initialLog = inputData.log;
+		var variableName = options.contextType==1?options.contextVariableName:false;
+		var varsNotReassigned = options.varsNotReassigned;
 		initialLog += "----------- Hashing methods/properties for GL context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
 			objectNames.push(variableName);
-			objectOffsets.push(this.initialDeclarationOffset);
+			objectOffsets.push(inputData.initialDeclarationOffset);
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
@@ -746,7 +817,9 @@ RegPack.prototype = {
 							// Fix for issue #11 : in FF, arrays have a method fill(), as 2D contexts do
 							// typeof() discriminates between "string" (hash match), "undefined" (no match) and "function" (array built-in)
 							if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
-								score += methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
+								var delta = methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
+								// Complement for issue #23, when the hash could be longer than the original name
+								score += Math.max(0, delta);
 							}
 						}
 						score -= 2; // a[hash]=b[hash]=a[i], "[hash]=" is packed for 1, remains "a" total 1+1
@@ -811,16 +884,21 @@ RegPack.prototype = {
 				
 					// Fix for issue #11, needed in this iteration again
 					if (typeof(forwardLookup[methodsInUse[methodIndex]])=="string") {
-						// replace all instances of that method ("g" option in the RegExp)
-						// The opening bracket at the end avoids triggering on a subset of the name,
-						// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
-						// The initial character (or line start) avoids triggering if one context has a name
-						// ending in another context's name (such as 'c' and 'cc')
-						var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+methodsInUse[methodIndex]+"\\(","g");						
-						hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]]+"(");
+						var gain = methodsInUse[methodIndex].length - forwardLookup[methodsInUse[methodIndex]].length;
+						if (gain > 0) {
+							// skip replacement if the hash would be longer than the original method
+						
+							// otherwise replace all instances of that method ("g" option in the RegExp)
+							// The opening bracket at the end avoids triggering on a subset of the name,
+							// for instance enable() instead of enableVertexAttribArray() in WebGL contexts
+							// The initial \b avoids triggering if one context has a name
+							// ending in another context's name (such as 'c' and 'cc')
+							var exp = new RegExp("\\b"+objectNames[contextIndex]+"\\."+methodsInUse[methodIndex]+"\\(","g");						
+							hashedCode = hashedCode.replace(exp, objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]]+"(");
 
-						// show the renaming in the details, for used methods only
-						details += objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]] + " -> " + methodsInUse[methodIndex] + "\n";
+							// show the renaming in the details, for used methods only
+							details += objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]] + " -> " + methodsInUse[methodIndex] + "\n";
+						}
 					}
 				}
 			}
@@ -1317,12 +1395,16 @@ RegPack.prototype = {
 	 * - if there are remaining variables in need of a name, fill gaps in the ASCII table, starting with the shortest ones.
 	 *   (for instance, if a,c,d,e,g,h are in use, it will assign b and f, since [a-h] is shorter than [ac-egh]
 	 *
-	 * @param input string containing the code to process
-	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
-	 * @return array [code with reassigned variable names, informations]
+	 * @param inputData (in/out) PackerData structure containing the setup and the code to process
+	 * @param options options set, see below for use details
+	 * @return nothing. Result of refactoring is stored in parameter inputData.
+	 * Options used are :
+	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
 	 */
-	reassignVariableNames : function (input, varsNotReassigned)
+	reassignVariableNames : function (inputData, options)
 	{
+		var input = inputData.contents;
+		var varsNotReassigned = options.varsNotReassigned;
 		var keywordsAndVariables = this.discriminateKeywordsAndVariables(input);
 		var keywordChars = keywordsAndVariables[0];
 		var variableChars = keywordsAndVariables[1];
@@ -1431,27 +1513,32 @@ RegPack.prototype = {
 			var exp = new RegExp("(^|[^\\w\\d$_])"+(oldVarName=="$"?"\\":"")+oldVarName,"g");						
 			output = output.replace(exp, "$1"+availableCharList[i]);
 			// Perform the replacement on the code appended by refactorToSetInterval()
-			this.interpreterCall = this.interpreterCall.replace(exp, "$1"+availableCharList[i]);
-			this.wrappedInit = this.wrappedInit.replace(exp, "$1"+availableCharList[i]);
+			inputData.interpreterCall = inputData.interpreterCall.replace(exp, "$1"+availableCharList[i]);
+			inputData.wrappedInit = inputData.wrappedInit.replace(exp, "$1"+availableCharList[i]);
 			
 			// replace the packed code holder definition and usage as well
 			// (some code is designed to reuse the string - see JsCrush or Impossible Road)
-			if (formerVariableCharList[i]==this.packedCodeVarName) {
-				this.packedCodeVarName = availableCharList[i];
+			if (formerVariableCharList[i]==inputData.packedCodeVarName) {
+				inputData.packedCodeVarName = availableCharList[i];
 			}
 			details += "  "+oldVarName+ " => "+availableCharList[i]+"\n";
 		}
 		
-		
-		return [output, details];
+		// output stored in inputData parameter instead of being returned
+		inputData.contents = output;
+		inputData.log += details;		
 	},
 
 	/**
 	 * First stage : apply the algorithm common to First Crush and JS Crush
 	 * Store the matches along with inner details in the array matchesLookup
+	 *
+	 * @param packerData A PackerData structure holding the input string and setup
+	 * @param options Preprocessing and packing options (tiebreaker, score factors)
+	 * @output array [length, packed string, log]
 	 */
-	findRedundancies : function(options) {
-
+	findRedundancies : function(packerData, options) {
+		this.input = packerData.contents.replace(/\\/g,'\\\\');
 		var s = this.input;
 		this.matchesLookup = [];
 		details='';
@@ -1514,7 +1601,7 @@ RegPack.prototype = {
 		}
 			
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i=this.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with('+this.packedCodeVarName+'.split(g[i]))'+this.packedCodeVarName+'=join(pop('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(g[i]))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 
@@ -1533,8 +1620,12 @@ RegPack.prototype = {
 	 * Second stage : extra actions required to reduce the token string to a RegExp
 	 *
 	 * Needs and modifies the matchesLookup array
+	 *
+	 * @param packerData A PackerData structure holding the input string and setup
+	 * @param options Preprocessing and packing options (tiebreaker, score factors)
+	 * @output array [length, packed string, log]
 	 */
-	packToRegexpCharClass : function(options) 
+	packToRegexpCharClass : function(packerData, options) 
 	{
 
 		var details = '';
@@ -1692,8 +1783,8 @@ RegPack.prototype = {
 		// add the unpacking code to the compressed string
 		var checkedString = regPackOutput;
 		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		regPackOutput='for('+this.packedCodeVarName+'='+B+regPackOutput.replace(c,'\\'+B)+B;
-		regPackOutput+=';g=/['+tokenString+']/.exec('+this.packedCodeVarName+');)with('+this.packedCodeVarName+'.split(g))'+this.packedCodeVarName+'=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		regPackOutput='for('+packerData.packedCodeVarName+'='+B+regPackOutput.replace(c,'\\'+B)+B;
+		regPackOutput+=';g=/['+tokenString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(g))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		
 		var resultSize = this.getByteLength(regPackOutput);
 		
@@ -1764,6 +1855,8 @@ RegPack.prototype = {
 	 *  - characters above 256 are \u....
 	 *  - characters between 128 and 255 are \x..
 	 *  - others (even below 32) are raw
+	 * @input charCode unicode value of the character to encode
+	 * @output formatted representation of the character for a RegExp char class
 	 */
 	printToRegexpCharClass : function(charCode)
 	{
@@ -1782,8 +1875,10 @@ RegPack.prototype = {
 	/**
 	 * Third stage : build the shortest negated character class regular expression
 	 * (a char class beginning with a ^, such as [^A-D] which comprises everything but characters A, B, C and D)
+	 * @param packerData A PackerData structure holding the input string and setup
+	 * @output array [length, packed string, log]
 	 */
-	packToNegatedRegexpCharClass : function() 
+	packToNegatedRegexpCharClass : function(packerData) 
 	{
 		// Build a list of characters used inside the string (as ranges)
 		// characters not in the list can be
@@ -1956,8 +2051,8 @@ RegPack.prototype = {
 		// add the unpacking code to the compressed string
 		var checkedString = thirdStageOutput;
 		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		thirdStageOutput='for('+this.packedCodeVarName+'='+B+thirdStageOutput.replace(c,'\\'+B)+B;
-		thirdStageOutput+=';g=/['+regExpString+']/.exec('+this.packedCodeVarName+');)with('+this.packedCodeVarName+'.split(g))'+this.packedCodeVarName+'=join(shift('+this.wrappedInit+'));'+this.environment+this.interpreterCall;
+		thirdStageOutput='for('+packerData.packedCodeVarName+'='+B+thirdStageOutput.replace(c,'\\'+B)+B;
+		thirdStageOutput+=';g=/['+regExpString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(g))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		
 		var resultSize = this.getByteLength(thirdStageOutput);
 		

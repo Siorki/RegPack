@@ -95,9 +95,12 @@ function doRegPack(withMath) {
 	
 	var bestMethod=0, bestCompression=1e8;
 	for (var i=0; i<methodCount; ++i) {
+		var packerData = packer.inputList[i];
 		for (var j=0; j<4; ++j) {
-			if (packer.inputList[i][j+1][0] < bestCompression) {
-				bestCompression = packer.inputList[i][j+1][0];
+			var output = (j==0 ? packerData.contents : packerData.result[j-1][1]);
+			var packedLength = packer.getByteLength(output);
+			if (packedLength < bestCompression) {
+				bestCompression = packedLength;
 				bestMethod = i;
 			} 
 		}
@@ -106,14 +109,16 @@ function doRegPack(withMath) {
 	// if the preprocessing stage produced no relevant output, hide the box
 	document.getElementById("preprocessed").style.display = (bestMethod==0&&!options.reassignVars ? "none" : "block");
 
-
+	var bestOutput = packer.inputList[bestMethod];
 	for (var j=0; j<3; ++j) {
-		var stage = j<2 ? j+1 : (packer.inputList[bestMethod][3][0]< packer.inputList[bestMethod][4][0] ? 3 : 4);
-		document.getElementById("stage"+j+"Message").innerHTML = resultMessage(packer.originalLength, packer.inputList[bestMethod][stage][0]);
-		document.getElementById("stage"+j+"Output").value = packer.inputList[bestMethod][stage][1];
+		var stage = j<2 ? j-1 : (packer.getByteLength(bestOutput.result[1][1])< packer.getByteLength(bestOutput.result[2][1]) ? 1 : 2);
+		var output = (stage<0 ?  bestOutput.contents : bestOutput.result[stage][1]);
+		var outputLength = packer.getByteLength(output);
+		document.getElementById("stage"+j+"Message").innerHTML = resultMessage(packer.originalLength, outputLength);
+		document.getElementById("stage"+j+"Output").value = output;
 		// highlight best result in green
-		document.getElementById("stage"+j+"Output").setAttribute("class",(bestCompression==packer.inputList[bestMethod][stage][0])?"best":"");
-		document.getElementById("stage"+j+"Details").value = packer.inputList[bestMethod][stage][2];
+		document.getElementById("stage"+j+"Output").setAttribute("class", bestCompression==outputLength ? "best" : "");
+		document.getElementById("stage"+j+"Details").value = (stage < 0 ? bestOutput.log : bestOutput.result[stage][2]);
 	}
 }
 
