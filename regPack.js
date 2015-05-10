@@ -1,18 +1,24 @@
 
 function resultMessage(sourceSize, resultSize)
 {
-	return sourceSize+'B to '+resultSize+'B ('+(resultSize-sourceSize)+'B, '+(((resultSize-sourceSize)/sourceSize*1e4|0)/100)+'%)'
+	var message = sourceSize+'B';
+	var prefix = (resultSize>sourceSize?"+":"");
+	if (sourceSize!=resultSize) {
+		message+=' to '+resultSize+'B ('+prefix+(resultSize-sourceSize)+'B, '+prefix+(((resultSize-sourceSize)/sourceSize*1e4|0)/100)+'%)'
+	}
+	return message;
 }
 
 
 function cmdRegPack(input, options) {
 	
-	packer.runPacker(input, options);
-	var methodCount = packer.inputList.length;
+	var originalLength = packer.getByteLength(input);
+	var inputList = packer.runPacker(input, options);
+	var methodCount = inputList.length;
 	
 	var bestMethod=0, bestCompression=1e8;
 	for (var i=0; i<methodCount; ++i) {
-		var packerData = packer.inputList[i];
+		var packerData = inputList[i];
 		for (var j=0; j<4; ++j) {
 			var output = (j==0 ? packerData.contents : packerData.result[j-1][1]);
 			var packedLength = packer.getByteLength(output);
@@ -31,10 +37,10 @@ function cmdRegPack(input, options) {
 		var outputLength = packer.getByteLength(output);
 		if (bestCompression == outputLength) {
 			bestVal = output;
-			mes = resultMessage(packer.originalLength, outputLength);
+			mes = resultMessage(originalLength, outputLength);
 		}
 	}
-	//console.log("packer:", packer.inputList[bestMethod]);
+	//console.log("packer:", inputList[bestMethod]);
 	console.warn("stats:", mes);
 	return bestVal;
 }
@@ -69,6 +75,18 @@ function PackerData(name, dataString) {
 	this.result= new Array;
 }
 
+/**
+ * Creates a clone of a PackerData object
+ * changing only the input, log, and name.
+ *
+ * Member variables added during the packing stage(escapedInput, matchesLookup)
+ * are not copied.
+ *
+ * @param packerData Original object to clone
+ * @param nameSuffix Suffix appended to the name of the clone
+ * @param newContents Replacement contents for the clone
+ * @param newLog Replacement log for the clone
+ */
 function clonePackerData(packerData, nameSuffix, newContents, newLog) {
 	var clone = new PackerData;
 	clone.name = packerData.name + nameSuffix;
@@ -84,10 +102,6 @@ function clonePackerData(packerData, nameSuffix, newContents, newLog) {
 }
 
 function RegPack() {
-	this.matchesLookup = [];
-	this.originalInput='';
-	this.input='';
-	this.originalLength=0;
 	
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
@@ -135,10 +149,10 @@ RegPack.prototype = {
 				options[opt] = default_options[opt];
 			}
 		}
-		this.inputList = this.preprocess(input, options);
-		for (var inputIndex=0; inputIndex < this.inputList.length; ++inputIndex)
+		var inputList = this.preprocess(input, options);
+		for (var inputIndex=0; inputIndex < inputList.length; ++inputIndex)
 		{
-			var currentData = this.inputList[inputIndex];
+			var currentData = inputList[inputIndex];
 			
 			// first stage : configurable crusher
 			var output = this.findRedundancies(currentData, options);
@@ -154,6 +168,7 @@ RegPack.prototype = {
 			
 			
 		}
+		return inputList;
 	},
 
 	/**
@@ -177,8 +192,6 @@ RegPack.prototype = {
 	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
 	 */
 	preprocess : function(input, options) {
-		this.originalInput = input;
-		this.originalLength = this.getByteLength(input);
 		
 		var inputData = new PackerData ('', input);
 		if (options.withMath) {
@@ -1531,16 +1544,18 @@ RegPack.prototype = {
 
 	/**
 	 * First stage : apply the algorithm common to First Crush and JS Crush
-	 * Store the matches along with inner details in the array matchesLookup
+	 * Adds member variables to packerData :
+	 *  - escapedInput : input with doubled antislashes
+	 *  - matchesLookup : array containing matches and inner details
 	 *
 	 * @param packerData A PackerData structure holding the input string and setup
 	 * @param options Preprocessing and packing options (tiebreaker, score factors)
 	 * @output array [length, packed string, log]
 	 */
 	findRedundancies : function(packerData, options) {
-		this.input = packerData.contents.replace(/\\/g,'\\\\');
-		var s = this.input;
-		this.matchesLookup = [];
+		packerData.escapedInput = packerData.contents.replace(/\\/g,'\\\\');
+		var s = packerData.escapedInput;
+		packerData.matchesLookup = [];
 		details='';
 		Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
 		var matches = {};
@@ -1596,7 +1611,7 @@ RegPack.prototype = {
 			
 			// and apply the compression to the string
 			s=s.split(e).join(c)+c+e;
-			this.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
+			packerData.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
 			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
 		}
 			
@@ -1607,19 +1622,24 @@ RegPack.prototype = {
 
 	/**
 	 * Clears a match from matchesLookup for dependencies
+	 *  - removes the corresponding token from the use list of other matches
+	 *  - sets the "cleared" flag to true
+	 *
+	 * @param packerData A PackerData structure holding the input string and setup, including the matches array
+	 * @param matchIndex index of the match to clear
 	 */
-	 clear : function(matchIndex) {
-		var oldToken = this.matchesLookup[matchIndex].token;
-		for (var j=0;j<this.matchesLookup.length;++j) {
-			this.matchesLookup[j].usedBy = this.matchesLookup[j].usedBy.split(oldToken).join("");
+	clear : function(packerData, matchIndex) {
+		var oldToken = packerData.matchesLookup[matchIndex].token;
+		for (var j=0;j<packerData.matchesLookup.length;++j) {
+			packerData.matchesLookup[j].usedBy = packerData.matchesLookup[j].usedBy.split(oldToken).join("");
 		}
-		this.matchesLookup[matchIndex].cleared=true;
+		packerData.matchesLookup[matchIndex].cleared=true;
 	},
 	
 	/**
 	 * Second stage : extra actions required to reduce the token string to a RegExp
 	 *
-	 * Needs and modifies the matchesLookup array
+	 * Needs and modifies the matchesLookup array inside the parameter packerData
 	 *
 	 * @param packerData A PackerData structure holding the input string and setup
 	 * @param options Preprocessing and packing options (tiebreaker, score factors)
@@ -1632,21 +1652,21 @@ RegPack.prototype = {
 		// First, re-expand the packed strings so that they no longer contain any compression token
 		// since we will be storing them in a different order.
 		// Use this step to establish a dependency graph (compressed strings containing other compressed strings)
-		for (var i=0;i<this.matchesLookup.length;++i) {
-			for (var j=0; j<this.matchesLookup.length;++j) {
-				if (this.matchesLookup[j].originalString.indexOf(this.matchesLookup[i].token)>-1) {
-					this.matchesLookup[j].originalString = this.matchesLookup[j].originalString.split(this.matchesLookup[i].token).join(this.matchesLookup[i].originalString);
+		for (var i=0;i<packerData.matchesLookup.length;++i) {
+			for (var j=0; j<packerData.matchesLookup.length;++j) {
+				if (packerData.matchesLookup[j].originalString.indexOf(packerData.matchesLookup[i].token)>-1) {
+					packerData.matchesLookup[j].originalString = packerData.matchesLookup[j].originalString.split(packerData.matchesLookup[i].token).join(packerData.matchesLookup[i].originalString);
 				}
-				if (i!=j && this.matchesLookup[j].originalString.indexOf(this.matchesLookup[i].originalString)>-1) {
-					this.matchesLookup[j].depends += this.matchesLookup[i].token;
-					this.matchesLookup[i].usedBy += this.matchesLookup[j].token;
+				if (i!=j && packerData.matchesLookup[j].originalString.indexOf(packerData.matchesLookup[i].originalString)>-1) {
+					packerData.matchesLookup[j].depends += packerData.matchesLookup[i].token;
+					packerData.matchesLookup[i].usedBy += packerData.matchesLookup[j].token;
 					
 				}
 			}
 		}
 		/** debug only
-		for (i=0; i<this.matchesLookup.length; ++i) {
-			c=this.matchesLookup[i];
+		for (i=0; i<packerData.matchesLookup.length; ++i) {
+			c=packerData.matchesLookup[i];
 			details += c.token.charCodeAt(0)+"("+c.token+") str1 = "+c.string+" str2 = "+c.originalString+" depends = /"+c.depends+"/\n";
 		}
 		*/
@@ -1658,7 +1678,7 @@ RegPack.prototype = {
 		var firstInLine = -1;
 		for(i=1;i<127;++i) {
 			var token = String.fromCharCode(i);
-			if (i!=34 && i!=39 && i!=92 && this.input.indexOf(token)==-1) {
+			if (i!=34 && i!=39 && i!=92 && packerData.escapedInput.indexOf(token)==-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -1698,22 +1718,22 @@ RegPack.prototype = {
 		// compression scoring is used as in the first stage.
 		var tokenLine = 0;	// 0-based index of current token line (block)
 		var tokenIndex = 0;	// 0-based index of current token in current line
-		this.tokenCount = 0; // total number of tokens used. Will be less than this.matchesLookup.length at the end if any negatives are found
+		packerData.tokenCount = 0; // total number of tokens used. Will be less than packerData.matchesLookup.length at the end if any negatives are found
 		var tokenString = "";
-		var regPackOutput = this.input;
-		for (var i=0;i<this.matchesLookup.length;++i) {
+		var regPackOutput = packerData.escapedInput;
+		for (var i=0;i<packerData.matchesLookup.length;++i) {
 			var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
-			for (var j=0; j<this.matchesLookup.length;++j) {
-				if (this.matchesLookup[j].usedBy=="" && !this.matchesLookup[j].cleared) {
+			for (var j=0; j<packerData.matchesLookup.length;++j) {
+				if (packerData.matchesLookup[j].usedBy=="" && !packerData.matchesLookup[j].cleared) {
 					var count=0;
-					for (var index=regPackOutput.indexOf(this.matchesLookup[j].originalString, 0); index>-1; ++count) {
-						index=regPackOutput.indexOf(this.matchesLookup[j].originalString, index+1);
+					for (var index=regPackOutput.indexOf(packerData.matchesLookup[j].originalString, 0); index>-1; ++count) {
+						index=regPackOutput.indexOf(packerData.matchesLookup[j].originalString, index+1);
 					}
-					var gain = count*this.matchesLookup[j].len-count-this.matchesLookup[j].len-2;
-					var score = options.crushGainFactor*gain+options.crushLengthFactor*this.matchesLookup[j].len+options.crushCopiesFactor*count;
+					var gain = count*packerData.matchesLookup[j].len-count-packerData.matchesLookup[j].len-2;
+					var score = options.crushGainFactor*gain+options.crushLengthFactor*packerData.matchesLookup[j].len+options.crushCopiesFactor*count;
 					if (gain>=0) {
 						if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*count>options.crushTiebreakerFactor*bestCount))) // R>N JsCrush, R<N First Crush
-							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score,bestLength=this.matchesLookup[j].len;
+							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score,bestLength=packerData.matchesLookup[j].len;
 					} else {
 						// found a negative. The matching string may no longer be packed (if anything, match count will decrease, not increase)
 						// so we clear it (ie remove it from the dependency chain). This in turns allows strings it uses to be packed,
@@ -1721,18 +1741,18 @@ RegPack.prototype = {
 						// clearing a negative introduces a bias, since some strings that were in order before it could have been
 						// considered for compression, but they were not because they were "usedBy" the negative.
 						// The comparison is useless : do not compress for this iteration of i 
-						this.clear(j);
+						this.clear(packerData, j);
 						negativeCleared = true;
 					}
 				}
 			}
 			if (!negativeCleared) {	// skip the compression step if we had a negative
 				if (matchIndex>-1) {	// a string was chosen, replace it with the next token
-					var matchedString = this.matchesLookup[matchIndex].originalString;
-					this.matchesLookup[matchIndex].newOrder = this.tokenCount;
+					var matchedString = packerData.matchesLookup[matchIndex].originalString;
+					packerData.matchesLookup[matchIndex].newOrder = packerData.tokenCount;
 					
 					// define the replacement token
-					++this.tokenCount;
+					++packerData.tokenCount;
 					if (++tokenIndex > tokenList[tokenLine].count) {
 						tokenString+=String.fromCharCode(tokenList[tokenLine].first);
 						if (tokenList[tokenLine].count>2) {
@@ -1758,15 +1778,15 @@ RegPack.prototype = {
 					regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
 					
 					// remove dependencies on chosen string/token
-					this.clear(matchIndex);
+					this.clear(packerData, matchIndex);
 				
 				} else {	// remaining strings, but no gain : skip them and end the loop
-					for (var j=0; j<this.matchesLookup.length;++j) {
-						if (!this.matchesLookup[j].cleared) {
-							details += "skipped str = "+this.matchesLookup[j].originalString+"\n";
+					for (var j=0; j<packerData.matchesLookup.length;++j) {
+						if (!packerData.matchesLookup[j].cleared) {
+							details += "skipped str = "+packerData.matchesLookup[j].originalString+"\n";
 						}
 					}
-					i=this.matchesLookup.length;
+					i=packerData.matchesLookup.length;
 				}
 			}
 		}
@@ -1794,7 +1814,7 @@ RegPack.prototype = {
 			var k = checkedString.split(token);
 			checkedString = k.join(k.shift());
 		}
-		var success = (checkedString == this.input);
+		var success = (checkedString == packerData.escapedInput);
 		details+=(success ? "passed" : "failed")+".\n";
 		
 
@@ -1893,7 +1913,7 @@ RegPack.prototype = {
 		var availableCharactersCount = 0;
 		for(i=1;i<128;++i) {
 			var token = String.fromCharCode(i);
-			if (this.input.indexOf(token)>-1) {
+			if (packerData.escapedInput.indexOf(token)>-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -1915,8 +1935,8 @@ RegPack.prototype = {
 		
 		// Issue #2 : unicode characters handling
 		var inputContainsUnicode = false;
-		for (i=0;i<this.input.length&&!inputContainsUnicode;++i) {
-			inputContainsUnicode = inputContainsUnicode || (this.input.charCodeAt(i)>127);
+		for (i=0;i<packerData.escapedInput.length&&!inputContainsUnicode;++i) {
+			inputContainsUnicode = inputContainsUnicode || (packerData.escapedInput.charCodeAt(i)>127);
 		}
 		if (inputContainsUnicode) {
 			// non-ASCII as a whole block. Those characters are not allowed as tokens,
@@ -1924,7 +1944,7 @@ RegPack.prototype = {
 			usedCharacters.push({first:128, last:65535, size:3});
 		}
 		
-		details = availableCharactersCount + " available tokens, "+this.tokenCount+" needed.\n"
+		details = availableCharactersCount + " available tokens, "+packerData.tokenCount+" needed.\n"
 		for (i in usedCharacters)
 		{
 			j=usedCharacters[i];
@@ -1944,7 +1964,7 @@ RegPack.prototype = {
 		// Characters between the ranges are included, thus lost as tokens.
 		// For instance, [A-K] is shorter than [A-CG-K] but loses D,E,F as potential tokens
 		// The process is repeated while there are enough tokens left.
-		var margin = availableCharactersCount - this.tokenCount;
+		var margin = availableCharactersCount - packerData.tokenCount;
 		var regExpString = "";
 		while (true) { // do not stop on margin==0, the next step may cost zero
 			var bestBlockIndex=[];
@@ -2036,12 +2056,12 @@ RegPack.prototype = {
 		details+= "tokens = "+tokenString+" ("+tokenString.length+")\n";
 		
 		// use the same matches order as in the second stage
-		this.matchesLookup.sort(function(a,b) {return a.newOrder-b.newOrder; });
-		var thirdStageOutput = this.input;
+		packerData.matchesLookup.sort(function(a,b) {return a.newOrder-b.newOrder; });
+		var thirdStageOutput = packerData.escapedInput;
 		// and perform the replacement using the token string as listed above
-		for (var i=0;i<this.tokenCount;++i)
+		for (var i=0;i<packerData.tokenCount;++i)
 		{
-			var matchedString = this.matchesLookup[i].originalString;
+			var matchedString = packerData.matchesLookup[i].originalString;
 			var token = tokenString[i];
 
 			details+=token.charCodeAt(0)+"("+token+"), str = "+matchedString+"\n";
@@ -2062,7 +2082,7 @@ RegPack.prototype = {
 			var k = checkedString.split(token);
 			checkedString = k.join(k.shift());
 		}
-		var success = (checkedString == this.input);
+		var success = (checkedString == packerData.escapedInput);
 		details+=(success ? "passed" : "failed")+".\n";
 		
 

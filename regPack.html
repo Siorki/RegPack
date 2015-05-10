@@ -10,18 +10,104 @@
 }
 
 .source {
-  background-color:#D0D0FF
+  box-shadow: 0px 0px 8px 1px rgb(0, 128, 255) inset;
 }
 
 .best {
-  background-color:#D0FFD0
+  box-shadow: 0px 0px 12px 1px rgb(0, 192, 0) inset;
 }
+
+b {
+	color: black;
+}
+
+b.bestMessage {
+	text-shadow: 1px 1px 1px rgb(0, 192, 0)
+}
+
+div#output {
+	display:none;
+}
+
+div.textBox {
+	width:50%;
+	padding:1px;
+	border:1px solid;
+	border-color:#888 #ccc #ccc #888;
+	margin: 1px 0px 1px 0px;
+	box-sizing: border-box;
+	display:inline-block;
+	vertical-align: top;
+	min-height:8em;
+}
+
+textarea {
+	width:50%;
+	margin: 1px 0px 1px 0px;
+	box-sizing: border-box;
+	border-radius:2px;
+	border:1px solid;
+	border-color:#888 #ccc #ccc #888;
+	vertical-align: top;
+	word-break: break-all;
+}
+
+pre.topLevel {
+	margin:1px;
+	padding-top:1px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	font: 1em/1.4 monospace;
+}
+
+span {
+	white-space: pre-wrap;
+	word-break: break-all;
+	box-shadow: 0px 0px 0px 1px rgba(0, 0, 0, 0.1) inset;
+}
+
+span.depth1 {
+	background-color:#DFD;
+}
+
+span.depth2 {
+	background-color:#AEA;
+}
+
+span.depth3 {
+	background-color:#7D7;
+}
+
+span.depth4 {
+	background-color:#9C6;
+}
+
+span.depth5 {
+	background-color:#AB5;
+}
+
+span.depth6 {
+	background-color:#CA4;
+}
+
+span.depth7 {
+	background-color:#E93;
+}
+
+span.depth8 {
+	background-color:#F71;
+}
+
+span.depth9 {
+	background-color:#F40;
+}
+
 
  	</style>
 </head>
 <body>
 <b>Original source</b>
-<br><textarea rows=12 cols=70 id="originalString" class="source"></textarea>
+<br><textarea rows=12 id="originalString" class="source"></textarea>
 <div id="options">
 Attempt method hashing and renaming for
 <input type="checkbox" name="paramOHash2D" id="paramOHash2D" checked="checked"/>2D canvas context
@@ -48,17 +134,19 @@ Tiebreaker = <select id="paramFTiebreaker">
 <br><i>Default settings match built-in formulas for both JS Crush and First Crush. 2/1/0 sometimes achieve better results.</i>
 </div>
 <br>
+<div id="output">
 <div id="preprocessed">
-	<b>Preprocessed : </b><b id="stage0Message"></b><br><textarea rows=12 cols=70 id="stage0Output"></textarea><textarea rows=12 cols=70 id="stage0Details"></textarea><br>
+	<b id="stage0Title">Preprocessed : </b><b id="stage0Message"></b><br><div id="stage0Output" class="textBox"></div><textarea rows=12 id="stage0Details"></textarea><br>
 </div>
 <div id="crushed">	
-	<b>Crushed : </b><b id="stage1Message"></b><br><textarea rows=12 cols=70 id="stage1Output"></textarea><textarea rows=12 cols=70 id="stage1Details"></textarea><br>
+	<b id="stage1Title">Crushed : </b><b id="stage1Message"></b><br><textarea rows=12 id="stage1Output"></textarea><textarea rows=12 id="stage1Details"></textarea><br>
 </div>
 <div id="packed">	
-	<b>RegPack'ed: </b><b id="stage2Message"></b><br><textarea rows=12 cols=70 id="stage2Output"></textarea><textarea rows=12 cols=70 id="stage2Details"></textarea><br>
+	<b id="stage2Title">RegPack'ed: </b><b id="stage2Message"></b><br><textarea rows=12 id="stage2Output"></textarea><textarea rows=12 id="stage2Details"></textarea><br>
 </div>
- 
+</div>
 <script src="regPack.js"></script>
+<script src="patternViewer.js"></script>
 <script>
 
 function doRegPack(withMath) {
@@ -89,13 +177,14 @@ function doRegPack(withMath) {
 		options.varsNotReassigned[i] = varsNotReassignedRaw.indexOf(String.fromCharCode(i))>-1 && packer.isCharAllowedInVariable(i);
 	}
 
-	packer.runPacker(input, options);
-	var methodCount = packer.inputList.length;
-
+	var originalLength = packer.getByteLength(input);
+	var inputList = packer.runPacker(input, options);
+	var methodCount = inputList.length;
+	var patternViewer = new PatternViewer;
 	
 	var bestMethod=0, bestCompression=1e8;
 	for (var i=0; i<methodCount; ++i) {
-		var packerData = packer.inputList[i];
+		var packerData = inputList[i];
 		for (var j=0; j<4; ++j) {
 			var output = (j==0 ? packerData.contents : packerData.result[j-1][1]);
 			var packedLength = packer.getByteLength(output);
@@ -104,21 +193,32 @@ function doRegPack(withMath) {
 				bestMethod = i;
 			} 
 		}
+	} 
+ 
+	// show the output boxes (hidden beforehand, they collapsed to near-zero size and this was not pretty)
+	document.getElementById("output").style.display = "block";
+
+	var bestOutput = inputList[bestMethod];
+	document.getElementById("stage0Message").innerHTML = resultMessage(originalLength, packer.getByteLength(bestOutput.contents));
+	var outputField = document.getElementById("stage0Output");
+	while (outputField.lastChild) {
+		outputField.removeChild(outputField.lastChild);
 	}
+	outputField.appendChild(patternViewer.render(bestOutput.contents, bestOutput.matchesLookup));
+	document.getElementById("stage0Details").value = bestOutput.log;
+	document.getElementById("stage0Details").style.height = outputField.offsetHeight+"px";
 
-	// if the preprocessing stage produced no relevant output, hide the box
-	document.getElementById("preprocessed").style.display = (bestMethod==0&&!options.reassignVars ? "none" : "block");
-
-	var bestOutput = packer.inputList[bestMethod];
-	for (var j=0; j<3; ++j) {
+	for (var j=1; j<3; ++j) {
 		var stage = j<2 ? j-1 : (packer.getByteLength(bestOutput.result[1][1])< packer.getByteLength(bestOutput.result[2][1]) ? 1 : 2);
-		var output = (stage<0 ?  bestOutput.contents : bestOutput.result[stage][1]);
+		var output = bestOutput.result[stage][1];
 		var outputLength = packer.getByteLength(output);
-		document.getElementById("stage"+j+"Message").innerHTML = resultMessage(packer.originalLength, outputLength);
+		document.getElementById("stage"+j+"Title").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
+		document.getElementById("stage"+j+"Message").innerHTML = resultMessage(originalLength, outputLength);
+		document.getElementById("stage"+j+"Message").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
 		document.getElementById("stage"+j+"Output").value = output;
 		// highlight best result in green
 		document.getElementById("stage"+j+"Output").setAttribute("class", bestCompression==outputLength ? "best" : "");
-		document.getElementById("stage"+j+"Details").value = (stage < 0 ? bestOutput.log : bestOutput.result[stage][2]);
+		document.getElementById("stage"+j+"Details").value = bestOutput.result[stage][2];
 	}
 }
 
