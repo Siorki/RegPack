@@ -136,13 +136,16 @@ Tiebreaker = <select id="paramFTiebreaker">
 <br>
 <div id="output">
 <div id="preprocessed">
-	<b id="stage0Title">Preprocessed : </b><b id="stage0Message"></b><br><div id="stage0Output" class="textBox"></div><textarea rows=12 id="stage0Details"></textarea><br>
+	<b id="stage0Title">Preprocessed : </b><b id="stage0Message"></b>
+	<br><div id="stage0Output" class="textBox"></div><textarea rows=12 id="stage0Details"></textarea><br>
 </div>
 <div id="crushed">	
-	<b id="stage1Title">Crushed : </b><b id="stage1Message"></b><br><textarea rows=12 id="stage1Output"></textarea><textarea rows=12 id="stage1Details"></textarea><br>
+	<b id="stage1Title">Crushed : </b><b id="stage1Message"></b><input type="checkbox" id="stage1Base64"/>base64
+	<br><textarea rows=12 id="stage1Output"></textarea><textarea rows=12 id="stage1Details"></textarea><br>
 </div>
 <div id="packed">	
-	<b id="stage2Title">RegPack'ed: </b><b id="stage2Message"></b><br><textarea rows=12 id="stage2Output"></textarea><textarea rows=12 id="stage2Details"></textarea><br>
+	<b id="stage2Title">RegPack'ed: </b><b id="stage2Message"></b><input type="checkbox" id="stage2Base64"/>base64
+	<br><textarea rows=12 id="stage2Output"></textarea><textarea rows=12 id="stage2Details"></textarea><br>
 </div>
 </div>
 <script src="packerData.js"></script>
@@ -150,6 +153,8 @@ Tiebreaker = <select id="paramFTiebreaker">
 <script src="regPack.js"></script>
 <script src="patternViewer.js"></script>
 <script>
+
+var outputCode = [];
 
 function doRegPack(withMath) {
 	
@@ -207,17 +212,23 @@ function doRegPack(withMath) {
 		outputField.removeChild(outputField.lastChild);
 	}
 	outputField.appendChild(patternViewer.render(bestOutput.contents, bestOutput.matchesLookup));
-	document.getElementById("stage0Details").value = bestOutput.log;
+	document.getElementById("stage0Details").value = outputCode[0] = bestOutput.log;
 	document.getElementById("stage0Details").style.height = outputField.offsetHeight+"px";
 
 	for (var j=1; j<3; ++j) {
 		var stage = j<2 ? j-1 : (packer.getByteLength(bestOutput.result[1][1])< packer.getByteLength(bestOutput.result[2][1]) ? 1 : 2);
-		var output = bestOutput.result[stage][1];
-		var outputLength = packer.getByteLength(output);
+		outputCode[j] = bestOutput.result[stage][1];
+		var outputLength = packer.getByteLength(outputCode[j]);
 		document.getElementById("stage"+j+"Title").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
 		document.getElementById("stage"+j+"Message").innerHTML = resultMessage(originalLength, outputLength);
 		document.getElementById("stage"+j+"Message").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
-		document.getElementById("stage"+j+"Output").value = output;
+		document.getElementById("stage"+j+"Base64").onclick = function(index) {
+			return function() { 
+				document.getElementById("stage"+index+"Output").value = this.checked ? btoa(outputCode[index]) : outputCode[index];
+			};
+		} (j);
+		document.getElementById("stage"+j+"Base64").onclick();	// set the textarea contents, raw or base64
+		
 		// highlight best result in green
 		document.getElementById("stage"+j+"Output").setAttribute("class", bestCompression==outputLength ? "best" : "");
 		document.getElementById("stage"+j+"Details").value = bestOutput.result[stage][2];
