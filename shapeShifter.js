@@ -1349,10 +1349,14 @@ ShapeShifter.prototype = {
 					}
 				}
 			}
+			
 			// There will always be enough characters, since we count those we are trying to eliminate
 			// In the worst case, variables will be renamed to themselves, with no loss.
-			// Sort the blocks, shortest to longest
-			unusedBlocks.sort( function(a,b) { return (a.nextToLast-a.first)-(b.nextToLast-b.first); } );
+			// Sort the blocks, shortest to longest.
+			// Fix for #29 : added tiebreaker (ASCII order) to get a consistent result
+			// (weight of 1/1000 so it does not interfere with the main comparison)
+			unusedBlocks.sort( function(a,b) { return (a.nextToLast-a.first)-(b.nextToLast-b.first)+.001*(a.first-b.first); } );
+
 			detailsSub1 = "Adding letters : ";
 			detailsSub2 = "Not renaming : ";
 			var blockIndex = 0;
