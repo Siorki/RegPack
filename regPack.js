@@ -1,4 +1,9 @@
-
+// Node.js : module shapeShifter defines ShapeShifter class (preprocessor)
+if (typeof require !== 'undefined') {
+    if (require.main !== module) {
+		var ShapeShifter = require('./shapeShifter');
+	}
+}
 function resultMessage(sourceSize, resultSize)
 {
 	var message = sourceSize+'B';
@@ -668,11 +673,13 @@ RegPack.prototype = {
 
 };
 
+var packer = new RegPack();
+
+
 // Node.js setup
 if (typeof require !== 'undefined') {
     if (require.main !== module) {
-		var ShapeShifter = require('./shapeShifter');
-        console.log(module);
+        //console.log(module);
         module.exports = {
             RegPack: RegPack,
             packer: packer,
@@ -685,4 +692,3 @@ if (typeof require !== 'undefined') {
     }
 }
 
-var packer = new RegPack();
