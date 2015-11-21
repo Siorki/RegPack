@@ -148,6 +148,7 @@ Tiebreaker = <select id="paramFTiebreaker">
 	<br><textarea rows=12 id="stage2Output"></textarea><textarea rows=12 id="stage2Details"></textarea><br>
 </div>
 </div>
+<script src="contextDescriptor_browser.js"></script>
 <script src="packerData.js"></script>
 <script src="shapeShifter.js"></script>
 <script src="regPack.js"></script>
@@ -171,18 +172,14 @@ function doRegPack(withMath) {
 		contextVariableName : document.getElementById("paramOGlobalDefined").checked!=""?document.getElementById("paramOGlobalVariable").value:false,
 		contextType : parseInt(document.getElementById("paramOGlobalType").value),
 		reassignVars : document.getElementById("paramOReassignVars").checked!="",
-		varsNotReassigned : [],
+		varsNotReassigned : document.getElementById("paramOExcludedVars").value,
 		crushGainFactor : parseFloat(document.getElementById("paramFGain").value),
 		crushLengthFactor : parseFloat(document.getElementById("paramFLength").value),
 		crushCopiesFactor : parseFloat(document.getElementById("paramFCopies").value),
 		crushTiebreakerFactor : parseInt(document.getElementById("paramFTiebreaker").value),
 		wrapInSetInterval : document.getElementById("paramOWrapInSetInterval").checked!="",
-		timeVariableName : document.getElementById("paramOTimeVariable").value
+		timeVariableName : document.getElementById("paramOTimeVariable").value,
 	};
-	var varsNotReassignedRaw = document.getElementById("paramOExcludedVars").value;
-	for (var i=0; i<127; ++i) {
-		options.varsNotReassigned[i] = varsNotReassignedRaw.indexOf(String.fromCharCode(i))>-1 && packer.preprocessor.isCharAllowedInVariable(i);
-	}
 
 	var originalLength = packer.getByteLength(input);
 	var inputList = packer.runPacker(input, options);
@@ -246,13 +243,15 @@ document.getElementById("mathPackAction").onclick=function()
 	doRegPack(true);
 }
 
+	
 // Fix for issue #12 : disable AudioContext hashing if the browser does not support it
-if (typeof AudioContext === "undefined")
+if (typeof AudioContext == "undefined")
 {
-        hashAudioCheckbox = document.getElementById("paramOHashAudio");
-        hashAudioCheckbox.checked = false;
-        hashAudioCheckbox.disabled = true;
+	hashAudioCheckbox = document.getElementById("paramOHashAudio");
+	hashAudioCheckbox.checked = false;
+	hashAudioCheckbox.disabled = true;
 }
+ 
 
 </script>
 </body>

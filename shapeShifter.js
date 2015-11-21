@@ -1,17 +1,21 @@
 // Node.js init
 if (typeof require !== 'undefined') {
 	PackerData = require("./packerData");
+	ContextDescriptor = require("./contextDescriptor_node");
 }
 
 /**
  * @constructor
- * ShapeShifter performs all the preprocessing on the original code :
+ * ShapeShifter is the preprocessor used by RegPack.
+ * It shortens the code, without compression, by running those algorithms on the original code according to settings
  *  - puts the code in "with(Math)" environment
- *  - wraps the mai code loop into a call to setInterval()
+ *  - wraps the main code loop into a call to setInterval()
  *  - hashes method / property names for 2D / GL / Audio contexts
  *  - renames the variable to optimize compression
  */
 function ShapeShifter() {
+	
+	this.contextDescriptor = new ContextDescriptor();
 	
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
@@ -48,11 +52,25 @@ ShapeShifter.prototype = {
 	 *       -  contextVariableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
 	 *       -  contextType : the context type (0=2D, 1=WebGL) if the "assume context" option was selected, irrelevant otherwise
 	 *       -  reassignVars : true to globally reassign variable names 
-	 *       -  varsNotReassigned : boolean array[128], true to prevent variable from being renamed
+	 *       -  varsNotReassigned : string or array listing all protected variables (whose name will not be modified)
 	 *       -  wrapInSetInterval : true to wrap the unpacked code in a setInterval() call instead of eval()
 	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
 	 */
 	preprocess : function(input, options) {
+	
+		// Transform the list of protected variables into a boolean array[128] (true = protected).
+		// Same information but easier to access by algorithms.
+		var varsNotReassignedRaw = options.varsNotReassigned;
+		options.varsNotReassigned = [];
+		for (var i=0; i<128; ++i) {	// replace by Array.fill() once ES6 is supported
+			options.varsNotReassigned.push(false);
+		}
+		for (var i=0; i<varsNotReassignedRaw.length; ++i) {
+			var ascii = varsNotReassignedRaw[i].charCodeAt(0);
+			if (ascii>=0 && ascii<128 && this.isCharAllowedInVariable(ascii)) {
+				options.varsNotReassigned[ascii] = true;
+			}
+		}
 		
 		var inputData = new PackerData ('', input);
 		if (options.withMath) {
@@ -72,11 +90,9 @@ ShapeShifter.prototype = {
 		//  - method and property
 		// then store the results in the inputList
 		if (options.hash2DContext) {
-			var canvas = document.createElement("canvas");
-			var context = canvas.getContext("2d");
 			for (var count=inputList.length, i=0; i<count; ++i)
 			{
-				var result = this.preprocess2DContext(inputList[i], options, context);
+				var result = this.preprocess2DContext(inputList[i], options);
 				if (result) {
 					var methodHashedData = PackerData.clone(inputList[i], " 2D(methods)", result[0][1], result[0][2]);
 					inputList.push(methodHashedData);
@@ -92,11 +108,9 @@ ShapeShifter.prototype = {
 		//   - as above, plus replace the definitions of constants with their values (magic numbers)
 		//   - hash and replace method and property names
 		if (options.hashWebGLContext) {
-			var canvas = document.createElement("canvas");
-			var context = canvas.getContext("experimental-webgl");
 			for (var count=inputList.length, i=0; i<count; ++i)
 			{
-				var result = this.preprocessWebGLContext(inputList[i], options, context);
+				var result = this.preprocessWebGLContext(inputList[i], options);
 				if (result) {
 					var methodHashedData = PackerData.clone(inputList[i], " WebGL(methods)", result[0][1], result[0][2]);
 					inputList.push(methodHashedData);
@@ -112,10 +126,9 @@ ShapeShifter.prototype = {
 
 		// for AudioContexts, method hashing only
 		if (options.hashAudioContext) {
-			var context = new AudioContext;
 			for (var count=inputList.length, i=0; i<count; ++i) 
 	 		{
-				var result = this.preprocessAudioContext(inputList[i].contents, context, options.varsNotReassigned, inputList[i].log);
+				var result = this.preprocessAudioContext(inputList[i].contents, options.varsNotReassigned, inputList[i].log);
 				if (result) {
 					var audioHashedData = PackerData.clone(inputList[i], " Audio", result[1], result[2]);
 					inputList.push(audioHashedData);
@@ -319,10 +332,9 @@ ShapeShifter.prototype = {
 	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
 	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
 	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
-	 * @param context an instance of a canvas 2d context, to list method names
 	 * @return the result array, or false if no 2d context definition is found in the code.
 	 */
-	preprocess2DContext : function(inputData, options, context) {
+	preprocess2DContext : function(inputData, options) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
 		var input = inputData.contents;
@@ -351,26 +363,11 @@ ShapeShifter.prototype = {
 			}
 		}
 
-		// Fix for issue #20 - make sure the behavior is identical in all browsers
-		// by creating extra methods / properties
-		// needs to be reconsidered at each new browser revision 
-		// (current are FF 36 / Chrome 41)
-		context["ellipse"]=context["arc"];	// Chrome only, not in FF 36
-		context["getContextAttributes"]=context["arc"];	// Chrome only, not in FF 36
-		context["imageSmoothingEnabled"]=true; // Chrome only, not in FF 36
-		context["mozCurrentTransform"]=context.transform;	// FF-prefixed
-		context["mozCurrentTransformInverse"]=context.transform;	// FF-prefixed
-		context["mozDash"]=[5,5];	// FF-prefixed
-		context["mozDashOffset"]=context.lineDashOffset;	// FF-prefixed
-		context["mozFillRule"]="nonZero";	// FF-prefixed
-		context["mozImageSmoothingEnabled"]=true;	// FF-prefixed
-		context["mozTextStyle"]="20pt Arial";	// FF-prefixed
-		context["webkitImageSmoothingEnabled"]=true; // Chrome-prefixed
-		context["drawImageFromRect"]=context["drawImage"];	// deprecated, gone from Chrome 41+
-		
 		if (objectNames.length) {
-			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned, initialLog);
-			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned, initialLog);
+			// obtain the list of properties in a 2D context from the ContextDescriptor
+			var referenceProperties = this.contextDescriptor.canvas2DContextDescription.properties;
+			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
+			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
 			return [hashedCodeM, hashedCodeP];
 		}
 		return false;
@@ -394,10 +391,9 @@ ShapeShifter.prototype = {
 	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
 	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
 	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
-	 * @param context an instance of a canvas webgl context, to list method names
 	 * @return the result array, or false if no webgl context definition is found in the code.
 	 */
-	preprocessWebGLContext : function(inputData, options, context) {
+	preprocessWebGLContext : function(inputData, options) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
 		var input = inputData.contents;
@@ -427,14 +423,17 @@ ShapeShifter.prototype = {
 		}
 			
 		if (objectNames.length) {
+			// list of properties in a 2D context
+			var referenceProperties = this.contextDescriptor.canvasGLContextDescription.properties;
+		
 			// method only hashing
-			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned, initialLog);
+			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
 			
 			// builds on former, replaces constants as well
-			var hashedCodeMC = this.replaceWebGLconstants(hashedCodeM[1], objectNames, context,  hashedCodeM[2]);
+			var hashedCodeMC = this.replaceWebGLconstants(hashedCodeM[1], objectNames, this.contextDescriptor.canvasGLContextDescription.constants,  hashedCodeM[2]);
 			
 			// method and property hashing
-			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, context, varsNotReassigned, initialLog);0
+			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);0
 			return [hashedCodeM, hashedCodeMC, hashedCodeP];
 		}
 
@@ -450,11 +449,11 @@ ShapeShifter.prototype = {
 	 *
 	 * @param input the code to perform replacement on
 	 * @param objectNames array containing variable names of context objects (mandatory)
-	 * @param context an instance of a canvas webgl context, to check for exiting properties and obtain their values
+	 * @param referenceConstants : object containing all constants of the GL context
 	 * @param initialLog : the action log, new logs will be appended	 
 	 * @return an array [length, output, user message]
 	 */
-	replaceWebGLconstants : function (input, objectNames, context, initialLog)
+	replaceWebGLconstants : function (input, objectNames, referenceConstants, initialLog)
 	{
 		var output = input, details=initialLog;
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
@@ -471,8 +470,8 @@ ShapeShifter.prototype = {
 
 			details += "Replaced constants of "+objectNames[contextIndex]+"\n";
 			for (var index=0; index<constantsInUse.length; ++index) {
-				if (constantsInUse[index] in context) {
-					var constant = context[constantsInUse[index]];
+				if (constantsInUse[index] in referenceConstants) {
+					var constant = referenceConstants[constantsInUse[index]];
 					var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+constantsInUse[index]+"(^|[^\\w$])","g");						
 					output = output.replace(exp, "$1"+constant+"$2");
 					// show the renaming in the details
@@ -493,13 +492,14 @@ ShapeShifter.prototype = {
 	 * even if the preprocessing actually lenghtened the string.
 	 *
 	 * @param input the code to preprocess
-	 * @param context an instance of an AudioContext, to list method names
 	 * @param varsNotReassigned boolean array[128], true to keep name of variable
 	 * @param initialLog : the action log, new logs will be appended	 
 	 * @return the result array, or false if no AudioContext definition is found in the code.
 	 */
+	preprocessAudioContext : function(input, varsNotReassigned, initialLog) {
+		// list of properties in an AudioContext
+		var referenceProperties = this.contextDescriptor.audioContextDescription.properties;
 
-	preprocessAudioContext : function(input, context, varsNotReassigned, initialLog) {
 		// Initialization of a *AudioContext can be performed in a variety of ways
 		// and is usually less consistent that a 2D or WebGL graphic context.
 		// Multiple tests cover the most common cases
@@ -554,7 +554,8 @@ ShapeShifter.prototype = {
 				objectName = replacementOffset>webkitReplacementOffset ? resultWebkit[1] : objectName ;
 				
 				// perform the replacement for the latter object first, so the offset of the former is not changed
-				var halfReplaced =this.renameObjectMethods(input, [secondObjectName], [secondReplacementOffset], [0], context, varsNotReassigned, details);
+
+				var halfReplaced =this.renameObjectMethods(input, [secondObjectName], [secondReplacementOffset], [0], referenceProperties, varsNotReassigned, details);
 				input = halfReplaced[1];
 				details = halfReplaced[2];
 			}
@@ -602,7 +603,7 @@ ShapeShifter.prototype = {
 		}
 		
 		if (replacementOffset>0) {
-			var preprocessedCode = this.renameObjectMethods(input, [objectName], [replacementOffset], [0], context, varsNotReassigned, details);
+			var preprocessedCode = this.renameObjectMethods(input, [objectName], [replacementOffset], [0], referenceProperties, varsNotReassigned, details);
 			return preprocessedCode;
 		}
 		return false;
@@ -635,12 +636,12 @@ ShapeShifter.prototype = {
 	 * @param objectNames : array containing variable names of context objects, whose methods to rename in the source string
 	 * @param objectOffsets : array, in the same order, of character offset to the beginning of the object declaration. Zero if defined outside (shim)
 	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
-	 * @param reference : an instance of an object of the same type (2D context, WebGL context, ..) to extract method names
+	 * @param referenceProperties : an array of strings containing property names for the appropriate context type
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
 	 * @param initialLog : the action log, new logs will be appended
 	 * @return the result of the renaming as an array [output length, output string, informations]
 	 */
-	renameObjectMethods : function(input, objectNames, objectOffsets, objectDeclarationLengths, reference, varsNotReassigned, initialLog)
+	renameObjectMethods : function(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog)
 	{
 				
 		var details = initialLog || '';
@@ -675,7 +676,8 @@ ShapeShifter.prototype = {
 			for (var xValue=functionDesc[1]; xValue<=functionDesc[2] ; ++xValue) {
 				for (var yValue=functionDesc[3]; yValue<=functionDesc[4] ; ++yValue) {
 					var reverseLookup = [], forwardLookup = [];
-					for (w in reference) {	
+					for (var index=0; index<referenceProperties.length; ++index) {
+						var w = referenceProperties[index];
 						var hashedName = functionDesc[5].call(null, w, xValue, yValue);
 						reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 					}
@@ -724,7 +726,8 @@ ShapeShifter.prototype = {
 		
 		// best hash function (based on byte gain) found. Apply it
 		var reverseLookup = [], forwardLookup = [];
-		for (w in reference) {	
+		for (var index=0; index<referenceProperties.length; ++index) {
+			var w = referenceProperties[index];
 			var hashedName = this.hashFunctions[bestIndex][5].call(null, w, bestXValue, bestYValue);
 			reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 		}
@@ -864,12 +867,12 @@ ShapeShifter.prototype = {
 	 * @param objectNames : array containing variable names of context objects, whose methods to rename in the source string
 	 * @param objectOffsets : array, in the same order, of character offset to the beginning of the object declaration. Zero if defined outside (shim)
 	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
-	 * @param reference : an instance of an object of the same type (2D context, WebGL context, ..) to extract property names
+	 * @param referenceProperties : an array of strings containing property names for the appropriate context type
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
 	 * @param initialLog : the action log, new logs will be appended
 	 * @return the result of the renaming as an array [output length, output string, informations]
 	 */
-	hashObjectProperties : function(input, objectNames, objectOffsets, objectDeclarationLengths, reference, varsNotReassigned, initialLog)
+	hashObjectProperties : function(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog)
 	{				
 		var details = initialLog || '';
 		var propertiesInUseByContext=[];
@@ -903,7 +906,8 @@ ShapeShifter.prototype = {
 			for (var xValue=functionDesc[1]; xValue<=functionDesc[2] ; ++xValue) {
 				for (var yValue=functionDesc[3]; yValue<=functionDesc[4] ; ++yValue) {
 					var reverseLookup = [], forwardLookup = [];
-					for (w in reference) {	
+					for (var index=0; index<referenceProperties.length; ++index) {
+						var w = referenceProperties[index];
 						var hashedName = functionDesc[5].call(null, w, xValue, yValue);
 						// a collision means that the hash is unsafe to use
 						//  - either another property/method is hashed to the same string
@@ -958,7 +962,8 @@ ShapeShifter.prototype = {
 		
 		// best hash function (based on byte gain) found. Apply it
 		var reverseLookup = [], forwardLookup = [];
-		for (w in reference) {	
+		for (var index=0; index<referenceProperties.length; ++index) {
+			var w = referenceProperties[index];
 			var hashedName = this.hashFunctions[bestIndex][5].call(null, w, bestXValue, bestYValue);
 			reverseLookup[hashedName] = (reverseLookup[hashedName] ? "<collision>" : w);
 		}

@@ -14,38 +14,38 @@ function resultMessage(sourceSize, resultSize)
 	return message;
 }
 
-
+/**
+ * Entry point when running RegPack from node.js, wrapper for the packer
+ * It performs the packing, then returns the best compressed (autoextractible) string
+ * 
+ * @param input A string containing the program to pack
+ * @param options An object detailing the different options for the preprocessor and packer
+ * @return A string containing the shortest compressed form of the input
+ */
 function cmdRegPack(input, options) {
 	
 	var originalLength = packer.getByteLength(input);
 	var inputList = packer.runPacker(input, options);
 	var methodCount = inputList.length;
 	
-	var bestMethod=0, bestCompression=1e8;
+	var bestMethod=0, bestStage = 0, shortestLength=1e8;
 	for (var i=0; i<methodCount; ++i) {
 		var packerData = inputList[i];
 		for (var j=0; j<4; ++j) {
 			var output = (j==0 ? packerData.contents : packerData.result[j-1][1]);
 			var packedLength = packer.getByteLength(output);
-			if (packedLength < bestCompression) {
-				bestCompression = packedLength;
+			if (packedLength < shortestLength) {
+				shortestLength = packedLength;
 				bestMethod = i;
+				bestStage = j;
 			} 
 		}
 	}
 
 	var bestOutput = inputList[bestMethod];
-	var bestVal = "";
-	var mes = "";
-	for (var j=0; j<3; ++j) {
-		var stage = j<2 ? j-1 : (packer.getByteLength(bestOutput.result[1][1])< packer.getByteLength(bestOutput.result[2][1]) ? 1 : 2);
-		var output = (stage<0 ?  bestOutput.contents : bestOutput.result[stage][1]);
-		var outputLength = packer.getByteLength(output);
-		if (bestCompression == outputLength) {
-			bestVal = output;
-			mes = resultMessage(originalLength, outputLength);
-		}
-	}
+	var bestVal = (bestStage==0 ?  bestOutput.contents : bestOutput.result[bestStage-1][1]);
+	var mes = resultMessage(originalLength, shortestLength);
+
 	//console.log("packer:", inputList[bestMethod]);
 	console.warn("stats:", mes);
 	return bestVal;
@@ -53,8 +53,9 @@ function cmdRegPack(input, options) {
 
 /**
  * @constructor
- * RegPack performs the packing stages.
- * It also features the main entry point
+ * The class RegPack wraps all the features from the tool
+ * It contains the main entry point : pack()
+ * It also implements the compression routines
  */ 
 function RegPack() {
 	this.preprocessor = new ShapeShifter();
@@ -75,7 +76,7 @@ RegPack.prototype = {
 			hash2DContext : false,
 			hashWebGLContext : false,
 			hashAudioContext : false,
-			contextVariableName : true,
+			contextVariableName : false,
 			contextType : parseInt(0),
 			reassignVars : true,
 			varsNotReassigned : ['a', 'b', 'c'],
@@ -673,7 +674,7 @@ RegPack.prototype = {
 
 };
 
-var packer = new RegPack();
+packer = new RegPack();
 
 
 // Node.js setup
