@@ -108,7 +108,7 @@ span.depth9 {
 <body>
 <b>Original source</b>
 <br><textarea rows=12 id="originalString" class="source"></textarea>
-<div id="options">
+<fieldset>
 Attempt method hashing and renaming for
 <input type="checkbox" name="paramOHash2D" id="paramOHash2D" checked="checked"/>2D canvas context
 <input type="checkbox" name="paramOHashWebGL" id="paramOHashWebGL" checked="checked"/>WebGL canvas context
@@ -119,20 +119,28 @@ Attempt method hashing and renaming for
 </select> <i>(as in js1k shim)</i>
 <br><input type="checkbox" name="paramOReassignVars" id="paramOReassignVars" checked="checked"/> Reassign variable names to produce consecutive character blocks,
 except for variables <input type="text" value="a b c" id="paramOExcludedVars" />
-<br><input type="checkbox" name="paramOWrapInSetInterval" id ="paramOWrapInSetInterval" checked="checked"/> Refactor to run with setInterval(). Use variable 
-<input type="text" size=6 value="t" id="paramOTimeVariable" /> for time (leave empty to assign one).
-<br><br><b>RegPack v4.0 dev branch</b> <button id="packAction">Pack</button><button id="mathPackAction">Pack with(Math)</button>
+</fieldset>
+<fieldset>
+<legend><i>Options impacting performance</i></legend>
+<input type="checkbox" name="paramOWithMath" id="paramOWithMath"/> Encapsulate with(Math)
+<br><input type="checkbox" name="paramOWrapInSetInterval" id="paramOWrapInSetInterval"/> Refactor to run with setInterval(). Use variable 
+<input type="text" size=4  id="paramOTimeVariable" /> for time <i>(leave empty to assign one. Time variable should be zero on the first loop and nonzero afterwards)</i>.
+</fieldset>
+<fieldset>
+<legend><b class="bestMessage">RegPack v4.0 dev branch</b></legend>
+<button id="packAction">Pack</button>
 Score = <input type="text" size=6 value=1 id="paramFGain" />
 *gain + <input type="text" size=6 value=0 id="paramFLength" />
 *length + <input type="text" size=6 value=0 id="paramFCopies" />
 *copies
 &nbsp;&nbsp;&nbsp;
+
 Tiebreaker = <select id="paramFTiebreaker">
 <option value=1 selected>longest string first (Js Crush)</option>
 <option value=-1 >most copies first (First Crush)</option>
 </select>
 <br><i>Default settings match built-in formulas for both JS Crush and First Crush. 2/1/0 sometimes achieve better results.</i>
-</div>
+</fieldset>
 <br>
 <div id="output">
 <div id="preprocessed">
@@ -157,7 +165,7 @@ Tiebreaker = <select id="paramFTiebreaker">
 
 var outputCode = [];
 
-function doRegPack(withMath) {
+function doRegPack() {
 	
 	for (var j=0; j<3; ++j) {
 		document.getElementById("stage"+j+"Output").value = "";
@@ -165,7 +173,7 @@ function doRegPack(withMath) {
 	}
 	var input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
 	var options = {
-		withMath : withMath,
+		withMath : document.getElementById("paramOWithMath").checked!="",
 		hash2DContext : document.getElementById("paramOHash2D").checked!="",
 		hashWebGLContext : document.getElementById("paramOHashWebGL").checked!="",
 		hashAudioContext : document.getElementById("paramOHashAudio").checked!="",
@@ -235,12 +243,7 @@ function doRegPack(withMath) {
 
 document.getElementById("packAction").onclick=function()
 {
-	doRegPack(false);
-}
-
-document.getElementById("mathPackAction").onclick=function()
-{
-	doRegPack(true);
+	doRegPack();
 }
 
 	

@@ -48,9 +48,9 @@ function testTimeVariableDeclaredAlone() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -82,9 +82,9 @@ function testTimeVariableDeclaredAtBegin1() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 /**
@@ -115,9 +115,9 @@ function testTimeVariableDeclaredAtBegin2() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -149,9 +149,9 @@ function testTimeVariableDeclaredAtBegin2() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -184,9 +184,9 @@ function testTimeVariableDeclaredAtEnd1() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -219,9 +219,9 @@ function testTimeVariableDeclaredAtEnd2() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 /**
@@ -253,9 +253,9 @@ function testTimeVariableDeclarationChainedFirst() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 /**
@@ -287,9 +287,9 @@ function testTimeVariableDeclarationChainedSecond() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -321,9 +321,9 @@ function testTimeVariableDeclarationInArrayFirst() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -355,9 +355,9 @@ function testTimeVariableDeclarationInArraySecond() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -369,7 +369,7 @@ function testTimeVariableDeclarationInArraySecond() {
  * Associated test file : gitHub#19-gitHub#19-setInterval_declarationInFunction1.js
  */
 function testTimeVariableDeclarationInFunctionParameterFirst() {
-	var input = fs.readFileSync("../TestCases/gitHub#19-gitHub#19-setInterval_declarationInFunction1.js", { encoding:"utf8"});
+	var input = fs.readFileSync("../TestCases/gitHub#19-setInterval_declarationInFunction1.js", { encoding:"utf8"});
 	var options = {
 			withMath : false,
 			hash2DContext : false,
@@ -390,9 +390,9 @@ function testTimeVariableDeclarationInFunctionParameterFirst() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -404,7 +404,7 @@ function testTimeVariableDeclarationInFunctionParameterFirst() {
  * Associated test file : gitHub#19-gitHub#19-setInterval_declarationInFunction2.js
  */
 function testTimeVariableDeclarationInFunctionParameterSecond() {
-	var input = fs.readFileSync("../TestCases/gitHub#19-gitHub#19-setInterval_declarationInFunction2.js", { encoding:"utf8"});
+	var input = fs.readFileSync("../TestCases/gitHub#19-setInterval_declarationInFunction2.js", { encoding:"utf8"});
 	var options = {
 			withMath : false,
 			hash2DContext : false,
@@ -425,9 +425,9 @@ function testTimeVariableDeclarationInFunctionParameterSecond() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 
@@ -439,7 +439,7 @@ function testTimeVariableDeclarationInFunctionParameterSecond() {
  * Associated test file : gitHub#19-gitHub#19-setInterval_declarationInFunction3.js
  */
 function testTimeVariableDeclarationInFunctionParameterLast() {
-	var input = fs.readFileSync("../TestCases/gitHub#19-gitHub#19-setInterval_declarationInFunction3.js", { encoding:"utf8"});
+	var input = fs.readFileSync("../TestCases/gitHub#19-setInterval_declarationInFunction3.js", { encoding:"utf8"});
 	var options = {
 			withMath : false,
 			hash2DContext : false,
@@ -460,9 +460,9 @@ function testTimeVariableDeclarationInFunctionParameterLast() {
 	
 	// Expected result : the encapsulation in setInterval is performed 
 	// References to "setInterval" are removed from the main code and pushed to the encapsulating call
-	assert.equal(result.interpreterCall, "setInterval(_,33)");
-	assert.equal(result.wrappedInit, "t=0");
-	assert.equal(result.contents.indexOf("setInterval"), -1);
+	assert.equal(result[0].interpreterCall, "setInterval(_,33)");
+	assert.equal(result[0].wrappedInit, "t=0");
+	assert.equal(result[0].contents.indexOf("setInterval"), -1);
 }
 
 module.exports = runTests;
