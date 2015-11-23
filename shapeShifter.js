@@ -409,7 +409,7 @@ ShapeShifter.prototype = {
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
-		var declarations = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,]*)*\))*/gi);
+		var declarations = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,!]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,!]*)*\))*/gi);
 		if (declarations) {
 			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
 			{
