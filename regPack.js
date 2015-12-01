@@ -337,12 +337,18 @@ RegPack.prototype = {
 					// define the replacement token
 					++packerData.tokenCount;
 					if (++tokenIndex > tokenList[tokenLine].count) {
-						tokenString+=String.fromCharCode(tokenList[tokenLine].first);
-						if (tokenList[tokenLine].count>2) {
-							tokenString+="-";
-						}
-						if (tokenList[tokenLine].count>1) {
-							tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenList[tokenLine].count-1);
+						// Fix for issue #31 : if a token line consists in a single "-", 
+						// add it at the beginning of the character class instead of appending it
+						if (tokenList[tokenLine].count==1 && tokenList[tokenLine].first == 45) { // 45 is '-'
+							tokenString="-"+tokenString;
+						} else {	// append the line as a single character, two characters or range (3+ characters)
+							tokenString+=String.fromCharCode(tokenList[tokenLine].first);
+							if (tokenList[tokenLine].count>2) {
+								tokenString+="-";
+							}
+							if (tokenList[tokenLine].count>1) {
+								tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenList[tokenLine].count-1);
+							}
 						}
 						++tokenLine;
 						tokenIndex=1;
@@ -611,9 +617,15 @@ RegPack.prototype = {
 			for (i in usedCharacters)
 			{
 				j=usedCharacters[i];
-				currentCharClass+=this.printToRegexpCharClass(j.first);
-				if (j.size>2) currentCharClass+='-';
-				if (j.size>1) currentCharClass+=this.printToRegexpCharClass(j.last);
+				// Fix for issue #31 : if a token line consists in a single "-", 
+				// add it at the beginning of the character class instead of appending it
+				if (j.size==1 && j.first==45) { // 45 is '-'
+					currentCharClass='-'+currentCharClass;
+				} else {
+					currentCharClass+=this.printToRegexpCharClass(j.first);
+					if (j.size>2) currentCharClass+='-';
+					if (j.size>1) currentCharClass+=this.printToRegexpCharClass(j.last);
+				}
 			}
 			details +=currentCharClass+"\n";
 			// keep the shortest RegExp - this may not be the last one if going through a negative gain streak
