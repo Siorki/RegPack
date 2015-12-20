@@ -1,3 +1,23 @@
+v4.0 - December 2015
+
+New features :
+ - #16 : Add an option for base64 encoded output
+ - #19 : Use setInterval() to evaluate the unpacked code
+ - #21 : Hash not only canvas functions, but also canvas properties
+ - #23 : Extra hashing functions
+ - #25 : Visualize the compressed patterns inside the source code
+
+Fixed bugs
+ - #10 : Use varsNotReassigned in renameObjectMethods 
+ - #17 : Hashing code confuses first and second 2D context
+ - #20 : Code packed in FF fails in Chrome because of deprecated context methods 
+ - #27 : Do not let variable renaming interfere with the use of the variable _
+ - #28 : Unable to create 2D/GL/Audio context under Node.js
+ - #29 : Variable renaming gives different results under FF / Chrome / Node.js
+ - #30 : support for '!' character in WebGL context declaration
+ - #31 : Single - character misinterpreted as range in RegExp
+
+------------------------------
 v3.0.2 - February 2015
 
 Fixed bugs
@@ -13,7 +33,7 @@ Fixed bugs
  - #4 : original size showed without added escapes
  - #5 : correct size in bytes after preprocessing stage
 ------------------------------
-v3 - February 2014
+v3.0 - February 2014
 
 Added preprocessing stage at the beginning of compression workflow.
 Preprocessing :
