@@ -1,6 +1,6 @@
 {
     "name": "RegPack",
-    "version": "4.0",
+    "version": "4.0.0",
     "description": "A packer intended for use on minified Javascript code",
     "homepage": "https://github.com/Siorki/RegPack",
     "dependencies": {
