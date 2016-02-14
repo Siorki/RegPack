@@ -1,8 +1,6 @@
 // Node.js : module shapeShifter defines ShapeShifter class (preprocessor)
 if (typeof require !== 'undefined') {
-    if (require.main !== module) {
-		var ShapeShifter = require('./shapeShifter');
-	}
+    var ShapeShifter = require('./shapeShifter');
 }
 function resultMessage(sourceSize, resultSize)
 {
