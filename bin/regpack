@@ -1,0 +1,6 @@
+#! /usr/bin/env node
+
+const cmdRegPack = require("..").cmdRegPack;
+var argv = require('minimist')(process.argv.slice(2));
+result = cmdRegPack(require('fs').readFileSync(argv._[0], 'utf-8'), argv);
+console.log(result);
