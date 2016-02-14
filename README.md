@@ -31,7 +31,14 @@ The text boxes show intermediate stage results. Best one gets a green highlight 
 ## CLI usage
 
 ```
+regpack input.js > output.js
 regpack input.js --crushGainFactor 1 --crushLengthFactor 0 --crushCopiesFactor 0 > output.js
+```
+
+From STDIN
+
+```
+cat input.js | regpack - > output.js
 ```
 
 --
