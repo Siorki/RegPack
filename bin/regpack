@@ -1,0 +1,21 @@
+#! /usr/bin/env node
+
+const cmdRegPack = require('..').cmdRegPack;
+var argv = require('minimist')(process.argv.slice(2));
+var input = argv._[0];
+
+if (input != '-') {
+    result = cmdRegPack(require('fs').readFileSync(input, 'utf-8'), argv);
+    console.log(result);
+} else {
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    var buffer = '';
+    process.stdin.on('data', function(data) {
+        buffer += data;
+    });
+    process.stdin.on('end', function() {
+      result = cmdRegPack(buffer, argv);
+      console.log(result);
+    });
+}
