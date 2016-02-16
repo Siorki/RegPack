@@ -28,7 +28,7 @@ PatternViewer.prototype = {
 		// First, create arrays storing whether each character is
 		// the beginning or the end of one or several pattern
 		var patternBegin = [], patternEnd = [];	// imbrication level for each character
-		for (var i=0; i<unpackedCode.length; ++i) {
+		for (var i=0; i<=unpackedCode.length; ++i) {
 			patternBegin.push(0);
 			patternEnd.push(0);
 		}
@@ -48,7 +48,9 @@ PatternViewer.prototype = {
 		var currentNodeContents = "";
 		var currentNode = output;
 		var currentDepth = 0;
-		for (var offset=0; offset<unpackedCode.length; ++offset)
+		// #37 : some patterns may contain the very end of the string
+		// (stored in patternEnd[last character + 1] ), so we iterate one extra step to close the matching <div>s
+		for (var offset=0; offset<=unpackedCode.length; ++offset)
 		{
 			for (var stepsDown=0; stepsDown<patternEnd[offset]; ++stepsDown) {
 				// unstacking : close the span
@@ -72,12 +74,12 @@ PatternViewer.prototype = {
 				currentNode.appendChild(newSpan);
 				currentNode = newSpan;
 			}
-
-			currentNodeContents+=unpackedCode[offset];
+			
+			// #37 : protect against overflow on that last character
+			if (offset<unpackedCode.length) {
+				currentNodeContents+=unpackedCode[offset];
+			}
 		}	
-		if (currentNodeContents != "") {
-			output.appendChild(document.createTextNode(currentNodeContents));
-		}
 		
 		return output;
 	}
