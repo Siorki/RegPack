@@ -665,8 +665,7 @@ RegPack.prototype = {
 		var checkedString = thirdStageOutput;
 		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		thirdStageOutput='for('+packerData.packedCodeVarName+'='+B+thirdStageOutput.replace(c,'\\'+B)+B;
-		thirdStageOutput+=';g=/['+regExpString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(g))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
-
+		thirdStageOutput+=';G=/['+regExpString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		var resultSize = this.getByteLength(thirdStageOutput);
 
 		details+="------------------------\nFinal check : ";
