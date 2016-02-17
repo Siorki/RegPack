@@ -197,7 +197,7 @@ RegPack.prototype = {
 		}
 
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in g='+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(g[i]))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in G='+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(G[i]))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 
@@ -391,7 +391,7 @@ RegPack.prototype = {
 		var checkedString = regPackOutput;
 		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		regPackOutput='for('+packerData.packedCodeVarName+'='+B+regPackOutput.replace(c,'\\'+B)+B;
-		regPackOutput+=';g=/['+tokenString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(g))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		regPackOutput+=';G=/['+tokenString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 
 		var resultSize = this.getByteLength(regPackOutput);
 
