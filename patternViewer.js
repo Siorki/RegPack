@@ -48,7 +48,7 @@ PatternViewer.prototype = {
 		var currentNodeContents = "";
 		var currentNode = output;
 		var currentDepth = 0;
-		// #37 : some patterns may contain the very end of the string
+		// #42 : some patterns may contain the very end of the string
 		// (stored in patternEnd[last character + 1] ), so we iterate one extra step to close the matching <div>s
 		for (var offset=0; offset<=unpackedCode.length; ++offset)
 		{
@@ -75,13 +75,22 @@ PatternViewer.prototype = {
 				currentNode = newSpan;
 			}
 			
-			// #37 : protect against overflow on that last character
+			// #42 : protect against overflow on that last character
 			if (offset<unpackedCode.length) {
 				currentNodeContents+=unpackedCode[offset];
 			}
 		}	
 		
+		// Append the last characters that are not part of a pattern
+		if (currentNodeContents != "")
+			currentNode.appendChild(document.createTextNode(currentNodeContents));
+
 		return output;
 	}
 
+}
+
+// Node.js exports (for non-regression tests only)
+if (typeof require !== 'undefined') {
+	module.exports = PatternViewer;
 }
