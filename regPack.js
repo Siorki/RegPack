@@ -259,7 +259,12 @@ RegPack.prototype = {
 		var firstInLine = -1;
 		for(i=1;i<127;++i) {
 			var token = String.fromCharCode(i);
-			if (i!=34 && i!=39 && i!=92 && packerData.escapedInput.indexOf(token)==-1) {
+			// quickfix for #45 - ']' (char code 93) is forbidden in a character class
+			// improvement for #47 will need to discriminate between :
+			//  - characters not allowed as tokens nor in code, can be safely included in range : LF(10), CR(13), (127)
+			//  - characters allowed as tokens, yet having to be escaped in the char class : \(92), ](93
+			//  - one quote may become a token if neither is present in the code : "(34), '(39)
+			if (i!=34 && i!=39 && i!=92 && i!=93 && packerData.escapedInput.indexOf(token)==-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
