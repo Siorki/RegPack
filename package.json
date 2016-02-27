@@ -1,13 +1,16 @@
 {
     "name": "RegPack",
-    "version": "4.0.0",
+    "version": "4.0.1",
     "description": "A packer intended for use on minified Javascript code",
     "main": "regPack.js",
     "bin": {
       "regpack": "bin/regpack"
     },
     "homepage": "https://github.com/Siorki/RegPack",
+	"bugs" : { "url" : "https://github.com/Siorki/RegPack/issues" },
+	"license" : "MIT",
+	"repository" : "Siorki/RegPack",
     "dependencies": {
-        "minimist": "1.1.0"
+        "minimist": ">=1.1.0"
     }
 }

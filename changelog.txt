@@ -1,4 +1,13 @@
-v4.0 - December 2015
+v4.0.1 - February 2015
+
+Fixed bugs
+ - #39 : Rename variable in unpacking loop and protect variable d and g by default 
+ - #40 : Fix use in Node and Better CLI support
+ - #41 : Visualization misses patterns that end at the last character
+ - #45 : Closing bracket ] not allowed in character class range definition
+
+------------------------------
+v4.0.0 - December 2015
 
 New features :
  - #16 : Add an option for base64 encoded output
