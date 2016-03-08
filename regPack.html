@@ -229,7 +229,7 @@ function doRegPack() {
 		document.getElementById("stage"+j+"Message").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
 		document.getElementById("stage"+j+"Base64").onclick = function(index) {
 			return function() { 
-				document.getElementById("stage"+index+"Output").value = this.checked ? btoa(outputCode[index]) : outputCode[index];
+				document.getElementById("stage"+index+"Output").value = this.checked ? btoa(unescape(encodeURIComponent(outputCode[index])))  : outputCode[index];
 			};
 		} (j);
 		document.getElementById("stage"+j+"Base64").onclick();	// set the textarea contents, raw or base64
