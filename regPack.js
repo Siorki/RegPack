@@ -176,11 +176,11 @@ RegPack.prototype = {
 				if(Z>0) {
 					if(value>bestValue||bestValue==value&&(Z>M||Z==M&&(options.crushTiebreakerFactor*R>options.crushTiebreakerFactor*N))) // R>N JsCrush, R<N First Crush
 						M=Z,N=R,e=i,bestValue=value,bestLength=j;
-				} else {
+				} else if (R<2) {
 					delete matches[i];
 				}
 			}
-			if(!e)
+			if(M<1)
 				break;
 
 			// update the other matches in case the selected one is a substring thereof
@@ -194,6 +194,19 @@ RegPack.prototype = {
 			s=s.split(e).join(c)+c+e;
 			packerData.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
 			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
+		}
+		
+		// Implementation for #48 : show the patterns that are "almost" gains 
+		details += "\n--- One extra occurrence needed for a gain --\n";
+		for(i in matches){
+			j=this.getByteLength(i);
+			R=matches[i];
+			Z=R*j-R-j-2;	
+			Z1=(R+1)*j-(R+1)-j-2;
+			value=options.crushGainFactor*Z1+options.crushLengthFactor*j+options.crushCopiesFactor*R;
+			if (Z1>0) {
+				details+="   val="+value+", gain="+Z+"->"+Z1+" (+"+(Z1-Z)+"), N="+R+", str = "+i+"\n";
+			}
 		}
 
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
