@@ -210,7 +210,7 @@ RegPack.prototype = {
 		}
 
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i in G='+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(G[i]))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i of'+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(i))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 
