@@ -83,7 +83,8 @@ RegPack.prototype = {
 			crushCopiesFactor : parseFloat(0),
 			crushTiebreakerFactor : parseInt(1),
 			wrapInSetInterval : false,
-			timeVariableName : ""
+			timeVariableName : "",
+			useES6 : true
 		};
 		for (var opt in default_options) {
 			if (!(opt in options)) {
@@ -210,7 +211,14 @@ RegPack.prototype = {
 		}
 
 		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+';for(i of'+B+tokens+B+')with('+packerData.packedCodeVarName+'.split(i))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		
+		var loopInitCode = ';for(i in G=', loopMemberCode = 'G[i]';
+		if (options.useES6) {
+			// ES6 : use 'for .. of' construct, which iterates on values, not keys => gain six bytes
+			loopInitCode = ';for(i of';
+			loopMemberCode = 'i';
+		}
+		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+loopInitCode+B+tokens+B+')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		return [this.getByteLength(i), i, details];
 	},
 

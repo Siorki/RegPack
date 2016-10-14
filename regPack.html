@@ -119,6 +119,7 @@ Attempt method hashing and renaming for
 </select> <i>(as in js1k shim)</i>
 <br><input type="checkbox" name="paramOReassignVars" id="paramOReassignVars" checked="checked"/> Reassign variable names to produce consecutive character blocks,
 except for variables <input type="text" value="a b c d g" id="paramOExcludedVars" />
+<br><input type="checkbox" name="paramUseES6" id="paramUseES6" checked="checked"/> Enable ES6 features.
 </fieldset>
 <fieldset>
 <legend><i>Options impacting performance</i></legend>
@@ -187,6 +188,7 @@ function doRegPack() {
 		crushTiebreakerFactor : parseInt(document.getElementById("paramFTiebreaker").value),
 		wrapInSetInterval : document.getElementById("paramOWrapInSetInterval").checked!="",
 		timeVariableName : document.getElementById("paramOTimeVariable").value,
+		useES6 : document.getElementById("paramUseES6").checked!=""
 	};
 
 	var originalLength = packer.getByteLength(input);
