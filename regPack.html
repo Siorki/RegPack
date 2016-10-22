@@ -172,7 +172,13 @@ function doRegPack() {
 		document.getElementById("stage"+j+"Output").value = "";
 		document.getElementById("stage"+j+"Details").value = ""	
 	}
-	var input = document.getElementById("originalString").value.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
+	// Implementation for issue #33 : append the code to the URL
+	var input = document.getElementById("originalString").value;
+	var urlArray = window.location.href.split("#code=");
+	window.location.href = urlArray[0]+"#code="+btoa(input);
+	
+	// Get rid of comments and empty lines
+	input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
 	var options = {
 		withMath : document.getElementById("paramOWithMath").checked!="",
 		hash2DContext : document.getElementById("paramOHash2D").checked!="",
@@ -248,14 +254,23 @@ document.getElementById("packAction").onclick=function()
 	doRegPack();
 }
 
+document.addEventListener("DOMContentLoaded", function(event) {
+	// Fix for issue #12 : disable AudioContext hashing if the browser does not support it
+	if (typeof AudioContext == "undefined") {
+		hashAudioCheckbox = document.getElementById("paramOHashAudio");
+		hashAudioCheckbox.checked = false;
+		hashAudioCheckbox.disabled = true;
+	}
 	
-// Fix for issue #12 : disable AudioContext hashing if the browser does not support it
-if (typeof AudioContext == "undefined")
-{
-	hashAudioCheckbox = document.getElementById("paramOHashAudio");
-	hashAudioCheckbox.checked = false;
-	hashAudioCheckbox.disabled = true;
-}
+	// Implementation for issue #33 : retrieve the original code from the URL, if present, and store in into input box
+	var urlArray = window.location.href.split("#code=");
+	if (urlArray.length == 2) {
+		document.getElementById("originalString").value = atob(urlArray[1]);
+	}
+ 
+
+});
+
  
 
 </script>
