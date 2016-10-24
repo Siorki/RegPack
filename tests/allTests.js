@@ -7,7 +7,9 @@ var testIssue0019_setInterval = require("./testIssue0019_setInterval");
 var testIssue0030_webGLContextCreate = require("./testIssue0030_webGLContextCreate");
 var testIssue0031_hyphenInRegex = require("./testIssue0031_hyphenInRegex");
 var testIssue0042_patternViewer = require("./testIssue0042_patternViewer");
+var testIssue0044_setIntervalArrowFunction = require("./testIssue0044_setIntervalArrowFunction");
 var testIssue0045_closingBracket = require("./testIssue0045_closingBracket");
+//var testIssue0050_unicodeSurrogate = require("./testIssue0050_unicodeSurrogate");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -21,4 +23,6 @@ testIssue0019_setInterval();
 testIssue0030_webGLContextCreate();
 testIssue0031_hyphenInRegex();
 testIssue0042_patternViewer();
+testIssue0044_setIntervalArrowFunction();
 testIssue0045_closingBracket();
+//testIssue0050_unicodeSurrogate();

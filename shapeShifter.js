@@ -178,7 +178,17 @@ ShapeShifter.prototype = {
 		var varsNotReassigned = options.varsNotReassigned;
 		var details = "----------- Refactoring to run with setInterval() ---------------\n";
 		var timeVariableProvided = true;
+
+		// implementation for #44 : match arrow function syntax (new in ES6)		
+		// regular expression matches pre-ES5 syntax : function(params){...}
 		var loopMatch = input.match(/setInterval\(function\(([\w\d.=,]*)\){/);
+		if (!loopMatch) { // regular expression matches ES6 syntax : (params)=>{...}
+			loopMatch = input.match(/setInterval\(\(([\w\d.=,]*)\)=>{/);
+		}
+		if (!loopMatch) { // regular expression matches ES6 syntax : one_param=>{...}
+			loopMatch = input.match(/setInterval\(([\w\d.]*)=>{/);
+		}
+
 		if (loopMatch) {
 			var initCode = input.substr(0, loopMatch.index);
 			// remove any trailing comma or semicolon			
