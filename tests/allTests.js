@@ -9,6 +9,7 @@ var testIssue0031_hyphenInRegex = require("./testIssue0031_hyphenInRegex");
 var testIssue0042_patternViewer = require("./testIssue0042_patternViewer");
 var testIssue0044_setIntervalArrowFunction = require("./testIssue0044_setIntervalArrowFunction");
 var testIssue0045_closingBracket = require("./testIssue0045_closingBracket");
+var testIssue0056_setIntervalDefaultParams = require("./testIssue0056_setIntervalDefaultParams");
 //var testIssue0050_unicodeSurrogate = require("./testIssue0050_unicodeSurrogate");
 
 // Execute all tests in sequence
@@ -25,4 +26,5 @@ testIssue0031_hyphenInRegex();
 testIssue0042_patternViewer();
 testIssue0044_setIntervalArrowFunction();
 testIssue0045_closingBracket();
+testIssue0056_setIntervalDefaultParams();
 //testIssue0050_unicodeSurrogate();

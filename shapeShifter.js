@@ -60,15 +60,18 @@ ShapeShifter.prototype = {
 	
 		// Transform the list of protected variables into a boolean array[128] (true = protected).
 		// Same information but easier to access by algorithms.
-		var varsNotReassignedRaw = options.varsNotReassigned;
-		options.varsNotReassigned = [];
-		for (var i=0; i<128; ++i) {	// replace by Array.fill() once ES6 is supported
-			options.varsNotReassigned.push(false);
-		}
-		for (var i=0; i<varsNotReassignedRaw.length; ++i) {
-			var ascii = varsNotReassignedRaw[i].charCodeAt(0);
-			if (ascii>=0 && ascii<128 && this.isCharAllowedInVariable(ascii)) {
-				options.varsNotReassigned[ascii] = true;
+		// Only perform it once on an option set : unit tests reuse the same options for several calls
+		if (!options.varsNotReassignedRaw) {
+			options.varsNotReassignedRaw = options.varsNotReassigned;
+			options.varsNotReassigned = [];
+			for (var i=0; i<128; ++i) {	// replace by Array.fill() once ES6 is supported
+				options.varsNotReassigned.push(false);
+			}
+			for (var i=0; i<options.varsNotReassignedRaw.length; ++i) {
+				var ascii = options.varsNotReassignedRaw[i].charCodeAt(0);
+				if (ascii>=0 && ascii<128 && this.isCharAllowedInVariable(ascii)) {
+					options.varsNotReassigned[ascii] = true;
+				}
 			}
 		}
 		
@@ -198,22 +201,21 @@ ShapeShifter.prototype = {
 			
 			details += "First "+loopMatch.index+" bytes moved to conditional sequence.\n";
 			
-			// parameters of the function passed to setInterval() :
-			// remove declarations without assignment
+			// parameters of the function passed to setInterval() : extract default values
+			// The regex matches a variable declaration, without value assignment (no "="),
+			// at the beginning, end, or between two commas
 			var paramsCode = loopMatch[1];
-			var paramsExp = /[\w\d$_]*,|$/;
+			var paramsExp = /(^|,)[A-Za-z$_][\w$_]*(,|$)/;
 		
 			var paramsMatch = paramsExp.exec(paramsCode);
-			while (paramsMatch[0] != "") {
-				paramsCode = paramsCode.substr(0, paramsMatch.index)+paramsCode.substr(paramsMatch.index+paramsMatch[0].length);
+			while (paramsMatch && paramsMatch[0] != "") {
+				// if the variable is between two commas, keep one : ",k," becomes ","
+				var keptCommas = (paramsMatch[1]+paramsMatch[2]).length>1 ? "," : "";
+				paramsCode = paramsCode.substr(0, paramsMatch.index)+keptCommas+paramsCode.substr(paramsMatch.index+paramsMatch[0].length);
 				paramsMatch = paramsExp.exec(paramsCode);
 			}
-			// remove the last variable (without the comma)
-			paramsMatch = paramsCode.match(/^[\w\d$_]*$/);
-			if (paramsMatch[0] == paramsCode) {
-				paramsCode = "";
-			}
-			// if not empty, add a semicolon
+
+			// end by a semicolon if there are any initializations that will be added to the main loop code
 			paramsCode += (paramsCode != "" ? ";" : "");
 			
 			if (timeVariableName=="") {
@@ -298,8 +300,8 @@ ShapeShifter.prototype = {
 				// Redefine the "offset zero" of our transformed code,
 				// used to hash methods/properties of contexts provided by shim
 				inputData.initialDeclarationOffset = wrapperCode.length;
-				initCode=wrapperCode+paramsCode+initCode+finalCode+"}";
-				output = initCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
+				initCode=wrapperCode+initCode+finalCode+"}";
+				output = initCode+paramsCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				
 				inputData.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
 				inputData.wrappedInit = timeVariableName+'=0';
