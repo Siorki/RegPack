@@ -1,5 +1,7 @@
 var testAudioContextCreate = require("./testAudioContextCreate");
 var testWebGLContextCreate = require("./testWebGLContextCreate");
+var testStringHelper = require("./testStringHelper");
+var testPackingConsistency = require("./testPackingConsistency");
 var testIssue0002_UnicodeSupport = require("./testIssue0002_UnicodeSupport");
 var testIssue0009_HashLoopVariable = require("./testIssue0009_HashLoopVariable");
 var testIssue0017_MultipleContexts = require("./testIssue0017_MultipleContexts");
@@ -15,6 +17,8 @@ var testIssue0056_setIntervalDefaultParams = require("./testIssue0056_setInterva
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
 // then push them down the list afterwards
+testStringHelper();
+testPackingConsistency();
 testAudioContextCreate();
 testWebGLContextCreate();
 testIssue0002_UnicodeSupport();

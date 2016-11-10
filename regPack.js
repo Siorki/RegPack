@@ -1,5 +1,6 @@
 // Node.js : module shapeShifter defines ShapeShifter class (preprocessor)
 if (typeof require !== 'undefined') {
+    var StringHelper = require('./stringHelper');
     var ShapeShifter = require('./shapeShifter');
 }
 function resultMessage(sourceSize, resultSize)
@@ -56,6 +57,7 @@ function cmdRegPack(input, options) {
  * It also implements the compression routines
  */
 function RegPack() {
+	this.stringHelper = StringHelper.getInstance();
 	this.preprocessor = new ShapeShifter();
 }
 
@@ -361,19 +363,15 @@ RegPack.prototype = {
 					// define the replacement token
 					++packerData.tokenCount;
 					if (++tokenIndex > tokenList[tokenLine].count) {
+						var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[tokenLine].first, tokenList[tokenLine].count);
 						// Fix for issue #31 : if a token line consists in a single "-",
 						// add it at the beginning of the character class instead of appending it
-						if (tokenList[tokenLine].count==1 && tokenList[tokenLine].first == 45) { // 45 is '-'
-							tokenString="-"+tokenString;
-						} else {	// append the line as a single character, two characters or range (3+ characters)
-							tokenString+=String.fromCharCode(tokenList[tokenLine].first);
-							if (tokenList[tokenLine].count>2) {
-								tokenString+="-";
-							}
-							if (tokenList[tokenLine].count>1) {
-								tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenList[tokenLine].count-1);
-							}
+						if (rangeString.charCodeAt(0)==45) { // 45 is '-'
+							tokenString = rangeString+tokenString;
+						} else {
+							tokenString += rangeString;
 						}
+
 						++tokenLine;
 						tokenIndex=1;
 					}
@@ -405,13 +403,7 @@ RegPack.prototype = {
 		}
 
 		// add the last token to the list / token string
-		tokenString+=String.fromCharCode(tokenList[tokenLine].first);
-		if (tokenIndex>2) {
-			tokenString+="-";
-		}
-		if (tokenIndex>1) {
-			tokenString+=String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
-		}
+		tokenString+=this.stringHelper.writeRangeToRegexpCharClass(tokenList[tokenLine].first, tokenIndex);
 
 		// add the unpacking code to the compressed string
 		var checkedString = regPackOutput;
@@ -456,16 +448,6 @@ RegPack.prototype = {
 		return count;
 	},
 
-	/**
-	 * Returns true if the character requires a backlash as a prefix in the character class of the
-	 * RegExp to be interpreted as part of the expression
-	 * Character : \ (used to escape others)
-	 * Character : ] (would close the character class otherwise)
-	 */
-	needsEscapingInCharClass : function(ascii)
-	{
-		return ascii==92||ascii==93;
-	},
 
 	/**
 	 * Returns a printable string representing the character
@@ -477,31 +459,8 @@ RegPack.prototype = {
 		if (ascii<32) {
 			return "\\"+ascii;
 		} else {
-			return (this.needsEscapingInCharClass(ascii)?"\\":"")+String.fromCharCode(ascii);
+			return (this.stringHelper.needsEscapingInCharClass(ascii)?"\\":"")+String.fromCharCode(ascii);
 		}
-	},
-
-	/**
-     * Returns the character matching the provided unicode value
-	 * as it should be displayed in a character class in a Regexp :
-	 *  -  ] needs escaping
-	 *  - characters above 256 are \u....
-	 *  - characters between 128 and 255 are \x..
-	 *  - others (even below 32) are raw
-	 * @input charCode unicode value of the character to encode
-	 * @output formatted representation of the character for a RegExp char class
-	 */
-	printToRegexpCharClass : function(charCode)
-	{
-		var output = "";
-		if (charCode>255) {
-			output = "\\u"+(charCode<4096?"0":"")+charCode.toString(16);
-		} else if (charCode>127) {
-			output = "\\x"+charCode.toString(16);
-		} else {
-			output = (this.needsEscapingInCharClass(charCode)?"\\":"")+String.fromCharCode(charCode);
-		}
-		return output;
 	},
 
 
@@ -591,10 +550,10 @@ RegPack.prototype = {
 				var gain = currentBlock.size+nextBlock.size-3;
 				// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
 				if (currentBlock.first != currentBlock.last) {
-					gain+=this.printToRegexpCharClass(currentBlock.last).length-1;
+					gain+=this.stringHelper.writeCharToRegexpCharClass(currentBlock.last).length-1;
 				}
 				if (nextBlock.first != nextBlock.last) {
-					gain+=this.printToRegexpCharClass(nextBlock.first).length-1;
+					gain+=this.stringHelper.writeCharToRegexpCharClass(nextBlock.first).length-1;
 				}
 				// we cannot use the ratio gain/cost as cost may be 0, if the interval is only made of one forbidden character
 				if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
@@ -609,9 +568,10 @@ RegPack.prototype = {
 					var nextYetBlock = usedCharacters[i+2];
 					cost += nextYetBlock.first - nextBlock.last - 1  - this.countForbiddenCharacters(nextBlock.last+1, nextYetBlock.first-1);
 					gain += nextYetBlock.size;
-					gain += (this.needsEscapingInCharClass(nextBlock.last)?1:0);
+					// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
+					gain += this.stringHelper.writeCharToRegexpCharClass(nextBlock.last).length-1;
 					if (nextYetBlock.first != nextYetBlock.last) {
-						gain+=(this.needsEscapingInCharClass(nextYetBlock.first)?1:0);
+						gain+=this.stringHelper.writeCharToRegexpCharClass(nextYetBlock.first).length-1;
 					}
 					if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
 						bestBlockIndex = [i+1, i];
@@ -641,14 +601,13 @@ RegPack.prototype = {
 			for (i in usedCharacters)
 			{
 				j=usedCharacters[i];
+				var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last-j.first+1);
 				// Fix for issue #31 : if a token line consists in a single "-",
 				// add it at the beginning of the character class instead of appending it
 				if (j.size==1 && j.first==45) { // 45 is '-'
-					currentCharClass='-'+currentCharClass;
+					currentCharClass=rangeString+currentCharClass;
 				} else {
-					currentCharClass+=this.printToRegexpCharClass(j.first);
-					if (j.size>2) currentCharClass+='-';
-					if (j.size>1) currentCharClass+=this.printToRegexpCharClass(j.last);
+					currentCharClass+=rangeString;
 				}
 			}
 			details +=currentCharClass+"\n";
