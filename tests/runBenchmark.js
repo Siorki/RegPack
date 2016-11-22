@@ -16,14 +16,18 @@ var sources = [
 	{ fileName:"2013 - StrangeCrystals II.js", options:{contextVariableName : 'a', wrapInSetInterval : true, timeVariableName : 'H' } },
 	{ fileName:"2013 - Synth Sphere.js", options:{contextVariableName : 'a', wrapInSetInterval : true } },
 	{ fileName:"2013 - Winter Wrap up.js", options:{contextVariableName : 'a' } },
-	{ fileName:"jscrush.js", options: {contextVariableName : 'a', varsNotReassigned : 'B' } },
 	{ fileName:"2014 - Dragon Drop.js", options:{} },
 	{ fileName:"2014 - Flappy Dragon Classic.js", options:{} },
 	{ fileName:"2014 - Highway at night.js", options:{ wrapInSetInterval : true, timeVariableName : 'I' } },
 	{ fileName:"2014 - Minecraft.js", options:{ wrapInSetInterval : true } },
 	{ fileName:"2015 - Defender.js", options:{ varsNotReassigned : 'abcV'} },
 	{ fileName:"2015 - Mysterious Monorail.js", options:{} },
-	{ fileName:"2015 - Impossible road.js", options:{} }
+	{ fileName:"2015 - Impossible road.js", options:{} },
+	{ fileName:"2016 - Romanesco 2.0.js", options:{ contextVariableName : 'g', contextType : 1} },
+	{ fileName:"2016 - Voxeling.js", options:{ wrapInSetInterval : true, timeVariableName : 'e', varsNotReassigned : 'abc'} },
+	{ fileName:"2016 - Firewatch.js", options:{ wrapInSetInterval : true, timeVariableName : 's'} },
+	{ fileName:"jscrush.js", options: {contextVariableName : 'a', varsNotReassigned : 'B' } }
+	
 ];
 
 
