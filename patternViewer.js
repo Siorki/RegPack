@@ -33,11 +33,13 @@ PatternViewer.prototype = {
 			patternEnd.push(0);
 		}
 		for (var j=0; j<matchesLookup.length;++j) {
-			var pattern = matchesLookup[j].originalString;
-			var offset = -pattern.length;
-			while ((offset=unpackedCode.indexOf(pattern, pattern.length+offset))>-1) {
-				++patternBegin[offset];
-				++patternEnd[pattern.length+offset];
+			if (matchesLookup[j].token) {
+				var pattern = matchesLookup[j].originalString;
+				var offset = -pattern.length;
+				while ((offset=unpackedCode.indexOf(pattern, pattern.length+offset))>-1) {
+					++patternBegin[offset];
+					++patternEnd[pattern.length+offset];
+				}
 			}
 		}
 

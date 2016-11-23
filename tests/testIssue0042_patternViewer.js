@@ -50,7 +50,7 @@ function testLastBlockBeforeEnd() {
 	document = new DocumentMock();
 	var patternViewer = new PatternViewer();
 	var code = "abcdefghijklmnopqrstuvwxyz";
-	var matches = [ { originalString : "defg" } ];
+	var matches = [ { token : "A", originalString : "defg" } ];
 	var result = patternViewer.render(code, matches);
 	assert.equal(document.message, "[abc][defg][hijklmnopqrstuvwxyz]");
 
@@ -64,7 +64,7 @@ function testLastBlockAtEnd() {
 	document = new DocumentMock();
 	var patternViewer = new PatternViewer();
 	var code = "abcdefghijklmnopqrstuvwxyz";
-	var matches = [ { originalString : "wxyz" } ];
+	var matches = [ { token : "A", originalString : "wxyz" } ];
 	var result = patternViewer.render(code, matches);
 	assert.equal(document.message,"[abcdefghijklmnopqrstuv][wxyz]");
 }

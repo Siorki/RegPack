@@ -4,10 +4,31 @@ var assert = require("assert");
 
 function runTests() {
 	console.log("StringHelper tests : start");
+	testGetByteLength();
 	testWriteRangeToRegexpCharClass();
 	console.log("StringHelper tests : done");
 }
 
+/**
+ * Unit test for StringHelper.getByteLength()
+ */
+function testGetByteLength() {
+	var stringHelper = StringHelper.getInstance();
+	assert.equal(stringHelper.getByteLength("e"), 1);
+	assert.equal(stringHelper.getByteLength(""), 1);
+	assert.equal(stringHelper.getByteLength("~"), 1);
+	assert.equal(stringHelper.getByteLength("\x80"), 2);
+	assert.equal(stringHelper.getByteLength("\xfc"), 2);
+	assert.equal(stringHelper.getByteLength("\u0200"), 2);
+	assert.equal(stringHelper.getByteLength("\u02ff"), 2);
+	assert.equal(stringHelper.getByteLength("\u2000"), 3);
+}
+
+/**
+ * Unit test for StringHelper.writeRangeToRegexpCharClass()
+ *               StringHelper.writeCharToRegexpCharClass()
+ *               StringHelper.needsEscapingInCharClass()
+ */
 function testWriteRangeToRegexpCharClass () {
 	var stringHelper = StringHelper.getInstance();
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(48, 10), "0-9");

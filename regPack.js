@@ -141,6 +141,7 @@ RegPack.prototype = {
 		var s = packerData.escapedInput;
 		packerData.matchesLookup = [];
 		details='';
+		
 		Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
 		var matches = {};
 		for(var tokens='';;tokens=c+tokens) {
@@ -199,15 +200,44 @@ RegPack.prototype = {
 			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
 		}
 		
+		// Needed for #47 : list matches that did not find a token
+		// As the packer may have more tokens available than the crusher 
+		// First, update the matches count
+		var newMatches={};
+		for(x in matches) {
+			for(j=s.indexOf(x),newMatches[x]=0;~j;newMatches[x]++)j=s.indexOf(x,j+x.length);
+		}
+		matches = newMatches;
+
+		var firstLine = true;
+		for(i in matches){
+			var j=this.getByteLength(i);
+			var R=matches[i];
+			var Z=R*j-R-j-2;	
+			if (Z>0) {
+				if (firstLine) {
+					details += "\n--- Potential gain, but not enough tokens ---\n";
+					firstLine = false;
+				}
+				var value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
+				details+="..( ) : val="+value+", gain="+Z+", N="+R+", str = "+i+"\n";
+				packerData.matchesLookup.push({token:"", string:i, originalString:i, depends:'', usedBy:'', gain:Z, copies:R, len:j, score:value, cleared:false, newOrder:9999});
+			}
+		}
+		
 		// Implementation for #48 : show the patterns that are "almost" gains 
-		details += "\n--- One extra occurrence needed for a gain --\n";
+		firstLine = true;
 		for(i in matches){
 			j=this.getByteLength(i);
 			R=matches[i];
 			Z=R*j-R-j-2;	
 			Z1=(R+1)*j-(R+1)-j-2;
-			value=options.crushGainFactor*Z1+options.crushLengthFactor*j+options.crushCopiesFactor*R;
-			if (Z1>0) {
+			if (Z<=0 && Z1>0) {
+				if (firstLine) {
+					details += "\n--- One extra occurrence needed for a gain --\n";
+					firstLine = false;
+				}
+				value=options.crushGainFactor*Z1+options.crushLengthFactor*j+options.crushCopiesFactor*R;
 				details+="   val="+value+", gain="+Z+"->"+Z1+" (+"+(Z1-Z)+"), N="+R+", str = "+i+"\n";
 			}
 		}
@@ -258,7 +288,7 @@ RegPack.prototype = {
 		// Use this step to establish a dependency graph (compressed strings containing other compressed strings)
 		for (var i=0;i<packerData.matchesLookup.length;++i) {
 			for (var j=0; j<packerData.matchesLookup.length;++j) {
-				if (packerData.matchesLookup[j].originalString.indexOf(packerData.matchesLookup[i].token)>-1) {
+				if (packerData.matchesLookup[i].token && packerData.matchesLookup[j].originalString.indexOf(packerData.matchesLookup[i].token)>-1) {
 					packerData.matchesLookup[j].originalString = packerData.matchesLookup[j].originalString.split(packerData.matchesLookup[i].token).join(packerData.matchesLookup[i].originalString);
 				}
 				if (i!=j && packerData.matchesLookup[j].originalString.indexOf(packerData.matchesLookup[i].originalString)>-1) {
@@ -282,12 +312,13 @@ RegPack.prototype = {
 		var firstInLine = -1;
 		for(i=1;i<127;++i) {
 			var token = String.fromCharCode(i);
-			// quickfix for #45 - ']' (char code 93) is forbidden in a character class
-			// improvement for #47 will need to discriminate between :
-			//  - characters not allowed as tokens nor in code, can be safely included in range : LF(10), CR(13), (127)
-			//  - characters allowed as tokens, yet having to be escaped in the char class : \(92), ](93
-			//  - one quote may become a token if neither is present in the code : "(34), '(39)
-			if (i!=34 && i!=39 && i!=92 && i!=93 && packerData.escapedInput.indexOf(token)==-1) {
+			// Allowed tokens : everything in the ASCII range except
+			//  - 0 and 127 (excluded from loop)
+			//  - any character present in the code
+			//  - LF(10) and CR(13), not allowed in code nor as tokens, skipped in ranges
+			//  - quotes "(34), '(39), this will change with #55
+			// New since #47, \(92) and ](93) which need escaping in character class, are allowed as tokens.
+			if (i!=34 && i!=39 && packerData.escapedInput.indexOf(token)==-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -303,18 +334,48 @@ RegPack.prototype = {
 					if (i==11 || i==14) {
 						--tokenCount;
 					}
-					tokenList.push({first:firstInLine, count:tokenCount});
+					if (tokenCount>0) {	// may be 0 if there is only CR or LF in the range
+						var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, tokenCount);
+						tokenList.push({first:firstInLine, count:tokenCount, cost:range.length});
+					}
 					firstInLine = -1;
 				}
 			}
 		}
 		if (firstInLine >-1) {
-			tokenList.push({first:firstInLine, count:i-firstInLine});
+			var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, i-firstInLine);
+			tokenList.push({first:firstInLine, count:i-firstInLine, cost:range.length});
 		}
-		// reorder the token block list, largest to smallest
-		tokenList.sort(function(a,b) {return b.count-a.count; });
-
-
+		// Reorder the block list. #47 introduces escaped characters, making the order a bit more complex :
+		//  - longest blocks (as in largest token count) first 
+		//  - when tied for length, non escaped characters first (shortest representation in char class)
+		//  - when tied again, readable characters (32-127) first
+		tokenList.sort(function(a,b) {
+			return 10*b.count-b.cost+b.first/1000- (10*a.count-a.cost+a.first/1000); 
+		});
+		
+		// The first range must not start with ^, otherwise it will be interpreted as negated char class
+		// Two solutions :
+		//  - remove the ^ from the range, starting with the next character
+		//  - swap the range with the next one, putting it into second position
+		// Removal is done here if the conditions match (
+		// Swapping is done later, as removal of \ and ] may expose the character ^ at the beginning of a range
+		if (tokenList[0].first == 94) {
+			if (packerData.matchesLookup.length < tokenList[0].count || tokenList.length==1) {
+				// If we have enough tokens in the first range without the ^, remove it
+				// Do the same if we only have one range
+				tokenList[0].cost = this.stringHelper.writeRangeToRegexpCharClass(++tokenList[0].first, --tokenList[0].count).length;
+			} 
+		}
+		
+		details +="\n";
+		details +="Token ranges\n"
+		details +="------------\n";
+		for (var i=0; i<tokenList.length;++i) {
+			details += this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].count);
+			details += " score = " + ( 10*tokenList[i].count-tokenList[i].cost+tokenList[i].first/1000) + "\n";
+		}
+		details +="\n";
 		// Then, flatten the dependency graph into a line. The new compression order starts
 		// with the strings that are not used within another strings (usually the longer ones)
 		// and ends by the strings not depending on others. The reason for that is that the
@@ -326,9 +387,10 @@ RegPack.prototype = {
 		// In case there are two or more candidates (not used by other strings), the same
 		// compression scoring is used as in the first stage.
 		var tokenLine = 0;	// 0-based index of current token line (block)
-		var tokenIndex = 0;	// 0-based index of current token in current line
+		var tokenIndex = 0;	// 1-based index of current token in current line (incremented immediately in the loop)
+		var outOfTokens = false;
 		packerData.tokenCount = 0; // total number of tokens used. Will be less than packerData.matchesLookup.length at the end if any negatives are found
-		var tokenString = "";
+		
 		var regPackOutput = packerData.escapedInput;
 		for (var i=0;i<packerData.matchesLookup.length;++i) {
 			var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
@@ -363,33 +425,36 @@ RegPack.prototype = {
 					// define the replacement token
 					++packerData.tokenCount;
 					if (++tokenIndex > tokenList[tokenLine].count) {
-						var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[tokenLine].first, tokenList[tokenLine].count);
-						// Fix for issue #31 : if a token line consists in a single "-",
-						// add it at the beginning of the character class instead of appending it
-						if (rangeString.charCodeAt(0)==45) { // 45 is '-'
-							tokenString = rangeString+tokenString;
+						if (tokenLine+1 < tokenList.length) {
+							++tokenLine;
+							tokenIndex=1;
 						} else {
-							tokenString += rangeString;
+							--packerData.tokenCount;
+							--tokenIndex;
+							outOfTokens = true;
+						}
+					}
+					if (!outOfTokens) {
+						var tokenCode = tokenList[tokenLine].first + tokenIndex - 1;
+						// skip CR and LF characters
+						// earlier checks ensured that they never end a block
+						// so we can safely skip to the next one
+						if (tokenCode==10 || tokenCode==13) {
+							++tokenCode;
+							++tokenIndex;
 						}
 
-						++tokenLine;
-						tokenIndex=1;
-					}
-					var tokenCode = tokenList[tokenLine].first + tokenIndex - 1;
-					// skip CR and LF characters
-					// earlier checks ensured that they never end a block
-					// so we can safely skip to the next one
-					if (tokenCode==10 || tokenCode==13) {
-						++tokenCode;
-						++tokenIndex;
-					}
-					var token = String.fromCharCode(tokenList[tokenLine].first+tokenIndex-1);
+						var token = String.fromCharCode(tokenCode);
+						details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
+						regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
 
-					details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
-					regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
-
-					// remove dependencies on chosen string/token
-					this.clear(packerData, matchIndex);
+						// remove dependencies on chosen string/token
+						this.clear(packerData, matchIndex);
+					} else {
+						// out of tokens : bail out early
+						details+="Out of tokens\n";
+						i=packerData.matchesLookup.length;
+					}
 
 				} else {	// remaining strings, but no gain : skip them and end the loop
 					for (var j=0; j<packerData.matchesLookup.length;++j) {
@@ -402,8 +467,82 @@ RegPack.prototype = {
 			}
 		}
 
-		// add the last token to the list / token string
-		tokenString+=this.stringHelper.writeRangeToRegexpCharClass(tokenList[tokenLine].first, tokenIndex);
+		// #47 introduces escaped characters (2 bytes instead of 1) as tokens
+		// Ranges with such a character at the beginning or end thus cost one extra byte to define
+		// If the last range used has leftover tokens (more tokens available than needed),
+		// we use those tokens at no cost to replace the escaped ones.
+		// for instance, last range is A-E but only used up to C, and we have range W-\\ before
+		// by substituting D for \\, we end up with [W-[A-D] which is one byte shorter than [W-\\A-C]
+
+		// First identify if we have leftover tokens in the last range
+		var remainingTokens = tokenList[tokenLine].count - tokenIndex;
+		// Force the last range to its actual length - in case it ends with a \ or ] but not all tokens are used
+		tokenList[tokenLine].count = tokenIndex; 
+		if (remainingTokens > 0) {
+			var tokensToReplace = [];
+			// then look for escaped characters at the beginning or end of a range
+			for (var i=0; i<=tokenLine; ++i) {
+				if (this.stringHelper.needsEscapingInCharClass(tokenList[i].first)) {
+					var needTwoTokens = tokenList[i].count>1 && this.stringHelper.needsEscapingInCharClass(1+tokenList[i].first);
+					// true if the first two in range need escaping. We need to replace two tokens to gain anything.
+					tokensToReplace.push({rangeIndex : i , atBeginning : true, count : needTwoTokens?2:1});
+				} else if (this.stringHelper.needsEscapingInCharClass(tokenList[i].first+tokenList[i].count-1)) {
+					var needTwoTokens = tokenList[i].count>1 && this.stringHelper.needsEscapingInCharClass(tokenList[i].first+tokenList[i].count-2);
+					// true if the last two in range need escaping. We need to replace two tokens to gain anything.
+					tokensToReplace.push({rangeIndex : i , atBeginning : false, count : needTwoTokens?2:1});
+				}
+			}
+			// Theoretically we should sort the array by increasing value of tokens needed
+			// However since the only possibilities here are [1, 1] or [2] we skip that step
+			// (only two characters need escaping)
+			for (var i=0; i<tokensToReplace.length; ++i) {
+				if (remainingTokens >= tokensToReplace[i].count) {
+					// substitute as many tokens as required (1 or 2)
+					for (var j=0; j<tokensToReplace[i].count; ++j) {
+						// substitute the token in the already packed string
+						++tokenIndex;
+						--remainingTokens;
+						var currentRange = tokenList[tokensToReplace[i].rangeIndex];
+						var oldToken = String.fromCharCode(tokensToReplace[i].atBeginning ? currentRange.first : currentRange.first + currentRange.count - 1);
+						var newToken = String.fromCharCode(tokenList[tokenLine].first + tokenIndex - 1);
+						regPackOutput = regPackOutput.split(oldToken).join(newToken);
+						details += oldToken.charCodeAt(0)+"("+oldToken+") replaced by "+newToken.charCodeAt(0)+"("+newToken+")\n";
+						
+						// shift beginning or end of the former range
+						--currentRange.count;
+						if (tokensToReplace[i].atBeginning) {
+							++currentRange.first;
+						}
+					}
+				}
+			}	
+		}
+
+		// limit the last range to the tokens actually used
+		tokenList[tokenLine].count = tokenIndex; 
+
+		
+		// The former step may have removed ] and \ at the beginning of a range, exposing ^ as first character
+		// If the first range starts with ^, the character class will be misinterpreted as a negative char class
+		// Swap the first two ranges to solve that issue.
+		if (tokenList[0].first == 94 && tokenList.length>1) {
+			var newFirstRange = tokenList.splice(1, 1);
+			tokenList.unshift(newFirstRange[0]);
+		}
+		
+		// build the character class
+		var tokenString = "";		
+		for (var i=0; i<=tokenLine; ++i) {
+			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].count);
+			// Fix for issue #31 : if a token line consists in a single "-",
+			// add it at the beginning of the character class instead of appending it
+			if (rangeString.charCodeAt(0)==45) { // 45 is '-'
+				tokenString = rangeString+tokenString;
+			} else {
+				tokenString += rangeString;
+			}			
+		}
+
 
 		// add the unpacking code to the compressed string
 		var checkedString = regPackOutput;
@@ -428,11 +567,11 @@ RegPack.prototype = {
 
 	/**
 	 * Returns true if the character is not allowed in a RegExp char class or as a token (ie needs escaping)
-	 * Characters : LF, CR, ', ", \, 127
+	 * Characters : LF, CR, ', ", 127
 	 */
 	isForbiddenCharacter : function(ascii)
 	{
-		return ascii==10||ascii==13||ascii==34||ascii==39||ascii==92||ascii==127;
+		return ascii==10||ascii==13||ascii==34||ascii==39||ascii==127;
 	},
 
 	/**
@@ -474,7 +613,7 @@ RegPack.prototype = {
 	{
 		// Build a list of characters used inside the string (as ranges)
 		// characters not in the list can be
-		//  - forbidden as tokens (LF, CR, ', ", -, \, 127) although these are allowed in the string too
+		//  - forbidden as tokens (LF, CR, ', ", -, 127) although these are allowed in the string too
 		//  - used as compression tokens
 		//  - neither used as compression tokens (if there are leftovers) nor in the string
 		//    those can be included in the RegExp without affecting the output
@@ -637,7 +776,7 @@ RegPack.prototype = {
 		packerData.matchesLookup.sort(function(a,b) {return a.newOrder-b.newOrder; });
 		var thirdStageOutput = packerData.escapedInput;
 		// and perform the replacement using the token string as listed above
-		for (var i=0;i<packerData.tokenCount;++i)
+		for (var i=0;i<packerData.tokenCount && i<tokenString.length;++i)
 		{
 			var matchedString = packerData.matchesLookup[i].originalString;
 			var token = tokenString[i];

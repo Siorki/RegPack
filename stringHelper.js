@@ -9,6 +9,46 @@
 var StringHelper = (function() {
 	var constructor = function() {
 	
+	
+		/**
+		 * Count bytes in a string's UTF-8 representation.
+		 * Code by 200_success at http://codereview.stackexchange.com/questions/37512/count-byte-length-of-string
+		 *
+		 * @param normal_val : input string
+		 * @return (int) string byte length
+		 */
+		this.getByteLength = function (normal_val) {
+			// Force string type
+			normal_val = String(normal_val);
+
+			var byteLen = 0;
+			for (var i = 0; i < normal_val.length; i++) {
+				var c = normal_val.charCodeAt(i);
+				byteLen += c < (1 <<  7) ? 1 :
+						   c < (1 << 11) ? 2 :
+						   c < (1 << 16) ? 3 :
+						   c < (1 << 21) ? 4 :
+						   c < (1 << 26) ? 5 :
+						   c < (1 << 31) ? 6 : Number.NaN;
+			}
+			return byteLen;
+		},
+		
+		
+		/**
+		 * Returns the total byte length of a string (keep below 1024 for js1k.com)
+		 * 1 for ASCII char, 2 to 4 for Unicode
+		 *
+		 * Issue #5 : final size when featuing unicode characters
+		 * @param string to measure
+		 * @return number of bytes representing the string in UTF8
+		 */
+		this.getByteLength = function (inString)
+		{
+			return encodeURI(inString).replace(/%../g,'i').length;
+		},
+
+	
 		/**
 		 * Returns the character matching the provided unicode value
 		 * as it should be displayed in a character class in a Regexp :
