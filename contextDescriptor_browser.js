@@ -48,12 +48,12 @@
 	 * to even out the property list for all browsers.
 	 * 
 	 * Needs to be reconsidered at each new browser revision 
-	 * (current are for FF 42 / Chrome 46)
+	 * (current reference are for FF 50 / Chrome 54)
 	 */
 	balance2DContexts : function() {
-		this.canvas2DContextDescription.properties.push("ellipse"); // Chrome only, not in FF 42
-		this.canvas2DContextDescription.properties.push("getContextAttributes");  // Chrome only, not in FF 42
-		this.canvas2DContextDescription.properties.push("imageSmoothingEnabled");  // Chrome only, not in FF 42
+		this.canvas2DContextDescription.properties.push("getContextAttributes");  // Chrome only
+		this.canvas2DContextDescription.properties.push("imageSmoothingEnabled");  // Chrome only
+		this.canvas2DContextDescription.properties.push("imageSmoothingQuality");  // Chrome only
 		this.canvas2DContextDescription.properties.push("mozCurrentTransform"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozCurrentTransformInverse"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozDash"); // FF-prefixed

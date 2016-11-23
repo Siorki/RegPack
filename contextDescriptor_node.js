@@ -9,7 +9,7 @@
  *   - audioContextDescription : for an AudioContext (if supported by the current browser)
  *
  * This implementation is a workaround for Node.js environments, which do not provide built-in canvas (nor associated contexts)
- * The values are explicitely set.
+ * The values are explicitely set based on FF 50 and Chrome 54
  */
  function ContextDescriptor()
  {
@@ -30,10 +30,12 @@
 			"createRadialGradient",
 			"drawFocusIfNeeded",
 			"drawImage",
+			"ellipse",
 			"fill",
 			"fillRect",
 			"fillStyle",
 			"fillText",
+			"filter",
 			"font",
 			"getImageData",
 			"getLineDash",
@@ -49,13 +51,6 @@
 			"measureText",
 			"miterLimit",
 			"moveTo",
-			"mozCurrentTransform",
-			"mozCurrentTransformInverse",
-			"mozDash",
-			"mozDashOffset",
-			"mozFillRule",
-			"mozImageSmoothingEnabled",
-			"mozTextStyle",
 			"putImageData",
 			"quadraticCurveTo",
 			"rect",
@@ -81,9 +76,9 @@
 			// Fix for issue #20 : add - make sure the behavior is identical in all browsers
 			// by adding extra methods / properties to the description of 2D context
 			// to even out the property list for all browsers.
-			"ellipse", // Chrome only, not in FF 42
-			"getContextAttributes",  // Chrome only, not in FF 42
-			"imageSmoothingEnabled",  // Chrome only, not in FF 42
+			"getContextAttributes",  // Chrome only, not in FF 
+			"imageSmoothingEnabled",  // Chrome only, not in FF
+			"imageSmoothingQuality",  // Chrome only, not in FF
 			"mozCurrentTransform", // FF-prefixed
 			"mozCurrentTransformInverse", // FF-prefixed
 			"mozDash", // FF-prefixed
@@ -851,6 +846,7 @@
 			"createDelay",
 			"createDynamicsCompressor",
 			"createGain",
+			"createIIRFilter",
 			"createMediaElementSource",
 			"createMediaStreamDestination",
 			"createMediaStreamSource",
@@ -870,7 +866,7 @@
 			"resume",
 			"sampleRate",
 			"state",
-			"suspend" 
+			"suspend"
 		], 
 		constants : {}
 	};
