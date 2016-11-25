@@ -1,0 +1,1 @@
+a=b=c=d=e=k=0;for(2==e&&k=1;k<50;++k)a+=k;for(2==a&&k=5;k<50;++k)b+=k*k;for(20==b&&k=9;k<50;++k)c+=k*k*k;for(p=1;p<50;++p)d+=1/p;for(p=1;p<50;++p)e+=1/p/p;

@@ -1134,12 +1134,14 @@ ShapeShifter.prototype = {
 	 */
 	getMostFrequentLoopVariable : function(input, varsNotReassigned)
 	{
-			// Choose the index variable for the added hashing code
+		// Choose the index variable for the added hashing code
 		// The algorithm counts every instance of "for(*" with individual letters replacing the star
 		// then chooses the letter with the most matches, in order to benefit most from compression
 		var log ="Loop variables :\n";
 		var indexMatches = new Array(128) ;
-		var loopIndexRegExp = /for\((\w)/g;
+
+		// #58 : only choose legal variable names, not digits
+		var loopIndexRegExp = /for\(([A-Za-z_$])/g;
 		var loopIndexResult=loopIndexRegExp.exec(input);
 		while (loopIndexResult) {	// get a set with a unique entry for each property
 			var code = loopIndexResult[1].charCodeAt(0);

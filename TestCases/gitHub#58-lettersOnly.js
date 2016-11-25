@@ -1,0 +1,1 @@
+a=b=c=d=e=0;for(k=0;k<50;++k)a+=k;for(k=0;k<50;++k)b+=k*k;for(k=0;k<50;++k)c+=k*k*k;for(p=1;p<50;++p)d+=1/p;for(p=1;p<50;++p)e+=1/p/p;
