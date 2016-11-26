@@ -176,7 +176,7 @@ function doRegPack() {
 	// Implementation for issue #33 : append the code to the URL
 	var input = document.getElementById("originalString").value;
 	var urlArray = window.location.href.split("#code=");
-	window.location.href = urlArray[0]+"#code="+btoa(input);
+	window.location.href = urlArray[0]+"#code="+StringHelper.getInstance().unicodeToBase64(input);
 	
 	// Get rid of comments and empty lines
 	input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
@@ -238,7 +238,8 @@ function doRegPack() {
 		document.getElementById("stage"+j+"Message").setAttribute("class", bestCompression==outputLength ? "bestMessage" : "");
 		document.getElementById("stage"+j+"Base64").onclick = function(index) {
 			return function() { 
-				document.getElementById("stage"+index+"Output").value = this.checked ? btoa(outputCode[index]) : outputCode[index];
+				// #52 : use StringHelper implementation instead of btoa() to handle Unicode characters > 255
+				document.getElementById("stage"+index+"Output").value = this.checked ? StringHelper.getInstance().unicodeToBase64(outputCode[index]) : outputCode[index];
 			};
 		} (j);
 		document.getElementById("stage"+j+"Base64").onclick();	// set the textarea contents, raw or base64
@@ -266,7 +267,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
 	// Implementation for issue #33 : retrieve the original code from the URL, if present, and store in into input box
 	var urlArray = window.location.href.split("#code=");
 	if (urlArray.length == 2) {
-		document.getElementById("originalString").value = atob(urlArray[1]);
+		document.getElementById("originalString").value = StringHelper.getInstance().base64ToUnicode(urlArray[1]);
 	}
  
 

@@ -6,6 +6,8 @@
  * JS singleton implementation based on
  * http://tassedecafe.org/fr/implementer-design-pattern-singleton-javascript-1023
  */
+ 
+
 var StringHelper = (function() {
 	var constructor = function() {
 	
@@ -32,22 +34,39 @@ var StringHelper = (function() {
 						   c < (1 << 31) ? 6 : Number.NaN;
 			}
 			return byteLen;
-		},
-		
+		}
 		
 		/**
-		 * Returns the total byte length of a string (keep below 1024 for js1k.com)
-		 * 1 for ASCII char, 2 to 4 for Unicode
+		 * Encode a string to base64
+		 * Replacement for btoa() which does not handle correctly characters beyond 0xff
 		 *
-		 * Issue #5 : final size when featuing unicode characters
-		 * @param string to measure
-		 * @return number of bytes representing the string in UTF8
+		 * Code from https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/Base64_encoding_and_decoding
+		 * See also http://stackoverflow.com/questions/246801/how-can-you-encode-a-string-to-base64-in-javascript
+		 *
+		 * @param str String to encode
+		 * @return base64 representation of the string
 		 */
-		this.getByteLength = function (inString)
-		{
-			return encodeURI(inString).replace(/%../g,'i').length;
-		},
+		this.unicodeToBase64 = function(str) {
+			return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+				return String.fromCharCode('0x' + p1);
+			}));
+		}
 
+		/**
+		 * Decode a string from base64
+		 * Replaces atob() which does not handle correctly characters beyond 0xff
+		 *
+		 * Code from https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/Base64_encoding_and_decoding
+		 *
+		 * @param str base64 string to decode
+		 * @return original decoded string
+		 */
+		this.base64ToUnicode = function(str) {
+			return decodeURIComponent(Array.prototype.map.call(atob(str), function(c) {
+				return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+			}).join(''));
+		}
+		
 	
 		/**
 		 * Returns the character matching the provided unicode value
@@ -122,3 +141,4 @@ var StringHelper = (function() {
 if (typeof require !== 'undefined') {
 	module.exports = StringHelper;
 }
+

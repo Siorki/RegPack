@@ -2,13 +2,43 @@ var StringHelper = require("../stringHelper")
 var fs = require("fs");
 var assert = require("assert");
 
+
 function runTests() {
 	console.log("StringHelper tests : start");
 	testGetByteLength();
+	testBase64();
 	testWriteRangeToRegexpCharClass();
 	console.log("StringHelper tests : done");
 }
 
+// basic implementation of btoa(), present in browser but not in node
+btoa=function(input) {
+	var output="";
+	var code="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	for (i=0; i<input.length; i+=3) {
+		output+=code[input.charCodeAt(i)>>2];
+		output+=code[((input.charCodeAt(i)&3)<<4)+(i+1<input.length ? input.charCodeAt(i+1)>>4 : 0)];
+		output+=i+1>=input.length ? "=" : code[((input.charCodeAt(i+1)&15)<<2) + (i+2<input.length ? input.charCodeAt(i+2)>>6 : 0)];
+		output+=i+2>=input.length ? "=" : code[input.charCodeAt(i+2)&63];
+	}
+	return output;
+}
+
+// basic implementation of atob(), present in browser but not in node
+atob=function(input) {
+	var output="";
+	var code="=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	for (i=0; i<input.length; i+=4) {
+		var encoded0 = code.indexOf(input[i])-1;
+		var encoded1 = code.indexOf(input[i+1])-1;
+		var encoded2 = code.indexOf(input[i+2])-1;
+		var encoded3 = code.indexOf(input[i+3])-1;
+		output+=String.fromCharCode((encoded0<<2)+((encoded1&48)>>4));
+		output+=encoded2<0 ? "" : String.fromCharCode(((encoded1&15)<<4)+((encoded2&60)>>2));
+		output+=encoded3<0 ? "" : String.fromCharCode(((encoded2&3)<<6)+encoded3);
+	}
+	return output;
+}
 /**
  * Unit test for StringHelper.getByteLength()
  */
@@ -22,6 +52,36 @@ function testGetByteLength() {
 	assert.equal(stringHelper.getByteLength("\u0200"), 2);
 	assert.equal(stringHelper.getByteLength("\u02ff"), 2);
 	assert.equal(stringHelper.getByteLength("\u2000"), 3);
+}
+
+/**
+ * Unit test for StringHelper.unicodeToBase64()
+ *               StringHelper.base64ToUnicode()
+ */ 
+function testBase64() {
+	var stringHelper = StringHelper.getInstance();
+	assert.equal(stringHelper.unicodeToBase64("M"), "TQ==");
+	assert.equal(stringHelper.unicodeToBase64("Ma"), "TWE=");
+	assert.equal(stringHelper.unicodeToBase64("Man"), "TWFu");
+	assert.equal(stringHelper.unicodeToBase64("abc123!?$*&()'-=@~"), "YWJjMTIzIT8kKiYoKSctPUB+");
+	assert.equal(stringHelper.unicodeToBase64("This is the data, in the clear."), "VGhpcyBpcyB0aGUgZGF0YSwgaW4gdGhlIGNsZWFyLg==");
+	assert.equal(stringHelper.unicodeToBase64("\n"), "Cg==");
+	assert.equal(stringHelper.unicodeToBase64("\u0227"), "yKc=");
+	assert.equal(stringHelper.unicodeToBase64("Base 64 \u2014 Mozilla Developer Network"), "QmFzZSA2NCDigJQgTW96aWxsYSBEZXZlbG9wZXIgTmV0d29yaw==");
+	assert.equal(stringHelper.unicodeToBase64("\u2713 \xE0 la mode"), "4pyTIMOgIGxhIG1vZGU=");
+	assert.equal(stringHelper.unicodeToBase64("\uD83D\uDD25"), "8J+UpQ==");
+
+	assert.equal(stringHelper.base64ToUnicode("TQ=="), "M");
+	assert.equal(stringHelper.base64ToUnicode("TWE="), "Ma");
+	assert.equal(stringHelper.base64ToUnicode("TWFu"), "Man");
+	assert.equal(stringHelper.base64ToUnicode("YWJjMTIzIT8kKiYoKSctPUB+"), "abc123!?$*&()'-=@~");
+	assert.equal(stringHelper.base64ToUnicode("VGhpcyBpcyB0aGUgZGF0YSwgaW4gdGhlIGNsZWFyLg=="), "This is the data, in the clear.");
+	assert.equal(stringHelper.base64ToUnicode("Cg=="), "\n");
+	assert.equal(stringHelper.base64ToUnicode("yKc="), "\u0227");
+	assert.equal(stringHelper.base64ToUnicode("QmFzZSA2NCDigJQgTW96aWxsYSBEZXZlbG9wZXIgTmV0d29yaw=="), "Base 64 \u2014 Mozilla Developer Network");
+	assert.equal(stringHelper.base64ToUnicode("4pyTIMOgIGxhIG1vZGU="), "\u2713 \xE0 la mode");
+	assert.equal(stringHelper.base64ToUnicode("8J+UpQ=="), "\uD83D\uDD25");
+	
 }
 
 /**
