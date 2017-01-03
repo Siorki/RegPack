@@ -1,0 +1,1 @@
+v=0;setInterval(()=>{s="'";t='"';s='"'+s;t='"'+t;u=(v&1?s:t);u+=t+s+t;z='"'+"'"+t+s+t;console.log(u)}, 40);

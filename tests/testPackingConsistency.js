@@ -19,25 +19,28 @@ function runTests() {
  * Unpacks a compressed string, independently of the wrapper (crusher or packer)
  */
 function unpack(packedCode) {
-
-	if (packedCode.indexOf("eval(")==-1
-		&& packedCode.indexOf("setInterval(")==-1) {
+	var callFunction = "eval(";
+	var packedStringVarOffset = packedCode.lastIndexOf(callFunction);
+	if (packedStringVarOffset == -1) {
+		callFunction = "setInterval(";
+		packedStringVarOffset= packedCode.lastIndexOf(callFunction);
+	}
+	if (packedStringVarOffset == -1) {
 		// no unpacking routine found : code is not packed
 		return packedCode;
 	}
-	// look for packed string : may be encapsulated between " or '
-	var begin1 = packedCode.indexOf("=\"",0);
-	var begin2 = packedCode.indexOf("='",0);
-	var packedStringBegin = begin1;
-	var packedStringEnd = packedCode.indexOf("\";",begin1);
-	if (begin1==-1 || (begin2>-1 && begin2<begin1)) {
-		packedStringBegin = begin2;
-		packedStringEnd = packedCode.indexOf("';",begin1);
-	}
-	var packedString = packedCode.substring(packedStringBegin+2, packedStringEnd);
-	var originalString = packedString;
+	packedStringVarOffset+=callFunction.length;
+	var packedStringVar = packedCode[packedStringVarOffset];
 	
-	// identify packing method : jscrush / first crush / regpack
+	// look for packed string : 
+	var packedStringBegin = packedCode.indexOf(packedStringVar+"=");
+	var packedStringDelimiter = packedCode[packedStringBegin+2];
+	var packedStringEnd = packedCode.lastIndexOf(packedStringDelimiter);
+	
+	var packedString = packedCode.substring(packedStringBegin+3, packedStringEnd);
+	var originalString = packedString.replace(new RegExp("\\"+packedStringDelimiter, "g"), packedStringDelimiter);
+
+	
 	var beginRegPack = packedCode.indexOf("=/", packedStringEnd);
 	if (beginRegPack>0) {	// RegPack marker identified
 		var endRegPack = packedCode.indexOf("/.exec", beginRegPack);
@@ -48,24 +51,15 @@ function unpack(packedCode) {
 			originalString = k.join(k.shift());
 		}
 	} else {
-		var beginOffset = 2;
-		var beginCrush = packedCode.indexOf("='", packedStringEnd);
-		if (beginCrush==-1) {
-			beginCrush = packedCode.indexOf("of'", packedStringEnd);
-			beginOffset = 3;
-		}
-		var endCrush = packedCode.indexOf("'", beginCrush+beginOffset);
-		if (beginCrush==-1) {
-			beginOffset = 2;
-			beginCrush = packedCode.indexOf("=\"", packedStringEnd);
-			if (beginCrush==-1) {
-				beginCrush = packedCode.indexOf('of"', packedStringEnd);
-				beginOffset = 3;
-			}
-			endCrush = packedCode.indexOf("\"", beginCrush+beginOffset);
-		}
-		if (beginCrush > 0) {	// JSCrush / FirstCrush marker identified
-			var tokenString= packedCode.substring(beginCrush+beginOffset, endCrush);
+		var tokensEnd = packedStringEnd;
+		var tokensBegin = packedCode.lastIndexOf(packedStringDelimiter, tokensEnd-1);
+		packedStringEnd = packedCode.lastIndexOf(packedStringDelimiter, tokensBegin-1);
+		
+		if (packedStringEnd > 0) {	// JSCrush / FirstCrush marker identified
+			packedString = packedCode.substring(packedStringBegin+3, packedStringEnd);
+			originalString = packedString.replace(new RegExp("\\"+packedStringDelimiter, "g"), packedStringDelimiter);
+			
+			var tokenString= packedCode.substring(tokensBegin+1, tokensEnd);
 			for (var i in tokenString) {
 				var k = originalString.split(tokenString[i])
 				originalString = k.join(k.pop());

@@ -25,6 +25,8 @@ function PackerData(name, dataString) {
 	this.wrappedInit = '';	// code inside the unpacked routine
 	this.initialDeclarationOffset = 0; // offset for 2D/GL context provided by shim
 	this.packedCodeVarName='_'; // name of the variable created to hold the packed code
+	this.containedStrings=[]; // all strings inside the input code
+	this.packedStringDelimiter='"'; // ', " or ` around the packed string
 	this.result= new Array;
 }
 
@@ -51,6 +53,8 @@ PackerData.clone = function(packerData, nameSuffix, newContents, newLog) {
 	clone.wrappedInit = packerData.wrappedInit;
 	clone.initialDeclarationOffset = packerData.initialDeclarationOffset;
 	clone.packedCodeVarName = packerData.packedCodeVarName;
+	clone.containedStrings = packerData.containedStrings.slice();
+	clone.packedStringDelimiter = packerData.packedStringDelimiter;
 	clone.result = new Array;
 	return clone;
 }

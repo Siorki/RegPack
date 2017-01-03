@@ -1,7 +1,7 @@
 // Node.js init
 if (typeof require !== 'undefined') {
-	PackerData = require("./packerData");
-	ContextDescriptor = require("./contextDescriptor_node");
+	var PackerData = require("./packerData");
+ 	var ContextDescriptor = require("./contextDescriptor_node");
 }
 
 /**
@@ -30,6 +30,7 @@ function ShapeShifter() {
 		["w[0]+[w[x]]+[w[y]]", 3, 20, 3, 20, function(w,x,y) { return w[0]+[w[x]]+[w[y]]; } ],
 		["w.substr(x,3)", 0, 2, 0, 0, function(w,x,y) { return w.substr(x,3); } ]
 	];
+	
 }
 
 
@@ -139,10 +140,11 @@ ShapeShifter.prototype = {
 			}
 		}
 		inputList[0].name="unhashed";
-		
-		if (options.reassignVars)
-		{
-			for (var i=0; i<inputList.length; ++i) {
+
+		for (var i=0; i<inputList.length; ++i) {
+			this.identifyStrings(inputList[i], options);
+			this.quoteStrings(inputList[i], options);
+			if (options.reassignVars) {
 				// method stores the refactored code, log and setup change in inputList[i]
 				this.reassignVariableNames(inputList[i], options);
 			}
@@ -1424,8 +1426,165 @@ ShapeShifter.prototype = {
 		// output stored in inputData parameter instead of being returned
 		inputData.contents = output;
 		inputData.log += details;		
-	}
+	},
+	
+	/**
+	 * Recognize all strings inside the input code
+	 *
+	 * Offset to beginning and end are stored into a table, along with
+	 *  - delimiters used : ", ' or `(since ES6)
+	 *  - other delimiters present inside the string
+     *  - if the string definition and allocation is standalone, and could thus be extracted	 
+	 * @param inputData (in/out) PackerData structure containing the setup and the code to process
+	 * @param options options set, see below for use details
+	 * @return nothing. Result is stored inside parameter inputData.
+	 * Options used are :
+	 *  none so far
+	 */
+	identifyStrings : function (inputData, options)
+	{
+		var details = "\nStrings present in the code :\n";
+		var inString = false;
+		var currentString = false;
+		var input = inputData.contents;
 
+		for (var i=0; i<input.length; ++i) {
+			var currentChar = input.charCodeAt(i);
+			// delimiters : 34 " , 39 ' , 96 `
+			if (currentChar==34 || currentChar==39 || currentChar==96) {
+				if (currentString) {
+					if (currentChar == currentString.delimiter && !escaped) {
+						// found the match to the string begin
+						currentString.end = i;
+						inputData.containedStrings.push(currentString);
+						details += "("+currentString.begin+"-"+currentString.end+") ";
+						details += currentString.characterCount[39]+"' "+currentString.characterCount[34]+'" '+currentString.characterCount[96]+"` ";
+						details += String.fromCharCode(currentString.delimiter)+input.substr(currentString.begin+1, currentString.end-currentString.begin-1)+String.fromCharCode(currentString.delimiter)+"\n";
+						currentString = false;
+					} else {
+						// another delimiter in the string, such as "`" or '"'
+						++currentString.characterCount[currentChar];
+					}
+				} else {
+					// start a new string
+					inString = true;
+					currentString = { begin:i, end:-1, delimiter:currentChar, characterCount:Array(128).fill(0) };
+				}
+			}
+			escaped = (currentChar==92 && !escaped);
+		}
+		inputData.log+=details+"\n";
+	},
+	
+	/**
+	 * Choose the delimiter for the final (packed) string
+	 *
+	 * Change the delimiters for strings inside as needed
+	 *
+	 * @param inputData (in/out) PackerData structure containing the setup and the code to process
+	 * @param options options set, see below for use details
+	 * @return nothing. Result is stored inside parameter inputData.
+	 * Options used are :
+	 *  useES6 : try ` as string delimiter if enables
+	 */
+	quoteStrings : function (inputData, options) {
+		// candidate delimiters
+		var allDelimiters = [ "'", '"' ];
+		if (options.useES6) {
+			allDelimiters.push("`");
+		}
+		
+		var bestCost = 999, bestDelimiter = '"', bestNewStringQuotes = 0;
+		var details = "\Wrapping packed code in :\n";
+		for (var delimiter of allDelimiters) {
+			var cost = 0;
+			var delimCode = delimiter.charCodeAt(0);
+			var newStringQuotes = [];
+			for (var i=0; i<inputData.containedStrings.length; ++i) {
+				cost += inputData.containedStrings[i].characterCount[delimCode] + (inputData.containedStrings[i].delimiter==delimCode ? 2 : 0);
+				
+				var bestNewQuote = String.fromCharCode(inputData.containedStrings[i].delimiter);
+				if (inputData.containedStrings[i].delimiter != 96) {
+					// Attempt to regain bytes by changing the string delimiter 
+					// only if it is ' or ", not ` as this would disable template literals
+					//  - gain all escapes from current delimiter being present inside the string
+					//  - gain 2 if the current string delimiter matches the chosen one for the packed string (as it will not have to be escaped)
+					//  - lose 1 for each copy of the new delimiter within the string
+					//  - lose 2 if the new string delimiter matches the chosen one for the packed string (as it will have to be escaped)
+					var bestStringGain = 0; 
+					var allStringDelimiters = [ "'", '"' ];
+					// only allow ` as delimiter if both ES6 flag is on, and the string does not contain "${"
+					// (as it would be mistaken for an expression placeholder)
+					var placeholderIndex = inputData.contents.indexOf("${", inputData.containedStrings[i].begin);
+					if (options.useES6 && (placeholderIndex==-1 || placeholderIndex>inputData.containedStrings[i].end)) {
+						allStringDelimiters.push("`");
+					}
+					for (var stringDelimiter of allStringDelimiters) {
+						var stringGain = 0;
+						var stringDelimCode = stringDelimiter.charCodeAt(0);
+						stringGain = inputData.containedStrings[i].characterCount[inputData.containedStrings[i].delimiter];
+						stringGain += inputData.containedStrings[i].delimiter==delimCode ? 2 : 0;
+						stringGain -= inputData.containedStrings[i].characterCount[stringDelimCode];
+						stringGain -= stringDelimCode==delimCode ? 2 : 0;
+						
+						// give a slight malus when changing the delimiter of a string
+						// so if the cost is tied, the solution that changes the least strings is preferred
+						stringGain -= (inputData.containedStrings[i].delimiter == stringDelimCode ? 0 : 0.01);
+						if (stringGain > bestStringGain) {
+							bestNewQuote = stringDelimiter;
+							bestStringGain = stringGain;
+						}
+					}
+					
+					cost -= bestStringGain;
+				}
+				newStringQuotes.push(bestNewQuote);
+			}
+								
+			details += " "+delimiter+" : cost = "+cost+"\n";
+			if (cost < bestCost) {
+				bestDelimiter = delimiter;
+				bestCost = cost;
+				bestNewStringQuotes = newStringQuotes.slice();
+			}
+		}
+		inputData.packedStringDelimiter = bestDelimiter;
+		
+		// perform replacement in strings
+		var newInput = "", offset = 0;
+		for (var i=0; i<inputData.containedStrings.length; ++i) {
+			var currentString = inputData.containedStrings[i];
+			newInput += inputData.contents.substr(offset, currentString.begin-offset);
+			var newDelimiter = bestNewStringQuotes[i];
+			var currentDelimiter = String.fromCharCode(currentString.delimiter);
+			if (currentString.delimiter == newDelimiter) {
+				// keep the delimiter for the current string
+				newInput += inputData.contents.substr(currentString.begin, currentString.end-currentString.begin+1);
+			} else {
+				// replace the delimiter, escape and unescape as needed
+				var exp = new RegExp("\\"+currentDelimiter, "g");
+				var rawString = inputData.contents.substr(currentString.begin+1, currentString.end-currentString.begin-1);
+				rawString = rawString.replace(exp, currentDelimiter);
+				exp = new RegExp(newDelimiter, "g");
+				rawString = rawString.replace(exp, "\\"+newDelimiter);
+				var quote = (newDelimiter==inputData.packedStringDelimiter ? "\\" : "")+newDelimiter;
+				
+				details += "("+currentString.begin+"-"+currentString.end+") : ";
+				details += String.fromCharCode(inputData.containedStrings[i].delimiter)+" -> "+newDelimiter+"\n";
+				inputData.containedStrings[i].begin = newInput.length;
+				inputData.containedStrings[i].delimiter = newDelimiter;
+				newInput += quote + rawString + quote;
+				inputData.containedStrings[i].end = newInput.length-1;
+				
+			}
+			offset = currentString.end+1;
+		}
+		newInput += inputData.contents.substr(offset);
+		inputData.contents = newInput;
+		
+		inputData.log+=details+"\n";		
+	}
+	
 }
 
 // Node.js exports (for packer)

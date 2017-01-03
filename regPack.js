@@ -142,7 +142,9 @@ RegPack.prototype = {
 		packerData.matchesLookup = [];
 		details='';
 		
-		Q=[];for(i=0;++i<127;i-10&&i-13&&i-34&&i-39&&i-92&&Q.push(String.fromCharCode(i)));
+		// #55 : 34(") and 39(') now allowed, as long as they are not the chosen delimiter
+		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
+		Q=[];for(i=0;++i<127;i-10&&i-13&&i-delimiterCode&&i-92&&Q.push(String.fromCharCode(i)));
 		var matches = {};
 		for(var tokens='';;tokens=c+tokens) {
 			for(c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
@@ -242,7 +244,6 @@ RegPack.prototype = {
 			}
 		}
 
-		c=s.split('"').length<s.split("'").length?(B='"',/"/g):(B="'",/'/g);
 		
 		var loopInitCode = ';for(i in G=', loopMemberCode = 'G[i]';
 		if (options.useES6) {
@@ -250,8 +251,17 @@ RegPack.prototype = {
 			loopInitCode = ';for(i of';
 			loopMemberCode = 'i';
 		}
-		i=packerData.packedCodeVarName+'='+B+s.replace(c,'\\'+B)+B+loopInitCode+B+tokens+B+')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
-		return [this.getByteLength(i), i, details];
+		
+		// escape the string delimiter present in the code
+		var packedString = s.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
+		
+		// and put everything together
+		var output = packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+packedString+packerData.packedStringDelimiter
+					+loopInitCode+packerData.packedStringDelimiter+tokens+packerData.packedStringDelimiter
+					+')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'
+					+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'
+					+packerData.environment+packerData.interpreterCall;
+		return [this.getByteLength(output), output, details];
 	},
 
 	/**
@@ -318,7 +328,8 @@ RegPack.prototype = {
 			//  - LF(10) and CR(13), not allowed in code nor as tokens, skipped in ranges
 			//  - quotes "(34), '(39), this will change with #55
 			// New since #47, \(92) and ](93) which need escaping in character class, are allowed as tokens.
-			if (i!=34 && i!=39 && packerData.escapedInput.indexOf(token)==-1) {
+			// New since #55, "(34) and '(39), as long as they are not the delimiter for the string
+			if (i!=packerData.packedStringDelimiter.charCodeAt(0) && packerData.escapedInput.indexOf(token)==-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -543,16 +554,18 @@ RegPack.prototype = {
 			}			
 		}
 
+		// escape the string delimiter present in the code
+		var checkedString = regPackOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
 
-		// add the unpacking code to the compressed string
-		var checkedString = regPackOutput;
-		c=regPackOutput.split('"').length<regPackOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		regPackOutput='for('+packerData.packedCodeVarName+'='+B+regPackOutput.replace(c,'\\'+B)+B;
+		// and add the unpacking code to the compressed string
+		regPackOutput='for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+checkedString+packerData.packedStringDelimiter;
 		regPackOutput+=';G=/['+tokenString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 
 		var resultSize = this.getByteLength(regPackOutput);
 
+		// check that unpacking the string yields the original code
 		details+="------------------------\nFinal check : ";
+		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,"g"), packerData.packedStringDelimiter);		
 		var regToken = new RegExp("["+tokenString+"]","");
 		for(var token="" ; token = regToken.exec(checkedString) ; ) {
 			var k = checkedString.split(token);
@@ -567,22 +580,27 @@ RegPack.prototype = {
 
 	/**
 	 * Returns true if the character is not allowed in a RegExp char class or as a token (ie needs escaping)
-	 * Characters : LF, CR, ', ", 127
+	 * Characters : LF, CR, 127
+	 * ' and " are allowed since #55, unless they are the delimiter for the packed string
 	 */
 	isForbiddenCharacter : function(ascii)
 	{
-		return ascii==10||ascii==13||ascii==34||ascii==39||ascii==127;
+		return ascii==10||ascii==13||ascii==127;
 	},
 
 	/**
-	 * Returns the number of forbidden characters in the interval (bounds inclusive)
-	 * Characters : same as in isForbiddenCharacter()
+	 * Returns the number of forbidden characters in the interval [first-last]
+	 * Characters : same as in isForbiddenCharacter(), and the packed string delimiter
+	 * However, the packed string delimiter is forbidden as a token too
+	 * @param first : ASCII code of the first character in the interval, inclusive
+	 * @param last : ASCII code of the last character in the interval, inclusive
+	 * @param delimiterCode : ASCII code of the packed string delimiter (counts as forbidden)
 	 */
-	countForbiddenCharacters : function (first, last)
+	countForbiddenCharacters : function (first, last, delimiterCode)
 	{
 		var count=0;
 		for (var i=first; i<=last; ++i) {
-			count+=this.isForbiddenCharacter(i)?1:0;
+			count+=(this.isForbiddenCharacter(i)||i==delimiterCode)?1:0;
 		}
 		return count;
 	},
@@ -613,7 +631,7 @@ RegPack.prototype = {
 	{
 		// Build a list of characters used inside the string (as ranges)
 		// characters not in the list can be
-		//  - forbidden as tokens (LF, CR, ', ", -, 127) although these are allowed in the string too
+		//  - forbidden as tokens (LF, CR, 127) although these are allowed in the string too
 		//  - used as compression tokens
 		//  - neither used as compression tokens (if there are leftovers) nor in the string
 		//    those can be included in the RegExp without affecting the output
@@ -633,7 +651,7 @@ RegPack.prototype = {
 					usedCharacters.push({first:firstInLine, last:i-1, size:Math.min(i-firstInLine,3)});
 					firstInLine = -1;
 				}
-				if (this.isForbiddenCharacter(i)) {
+				if (this.isForbiddenCharacter(i) || i==packerData.packedStringDelimiter.charCodeAt(0)) {
 					forbiddenCharacters.push(token);
 				} else {
 					++availableCharactersCount;
@@ -656,14 +674,19 @@ RegPack.prototype = {
 		}
 
 		details = availableCharactersCount + " available tokens, "+packerData.tokenCount+" needed.\n"
-		for (i in usedCharacters)
-		{
+		var regExpString = "";
+		for (i in usedCharacters) {
 			j=usedCharacters[i];
-			details+=this.getPrintableString(j.first);
-			if (j.size>2) details+='-';
-			if (j.size>1) details+=this.getPrintableString(j.last);
+			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last-j.first+1);
+			// Fix for issue #31 : if a token line consists in a single "-",
+			// add it at the beginning of the character class instead of appending it
+			if (j.size==1 && j.first==45) { // 45 is '-'
+				regExpString=rangeString+currentCharClass;
+			} else {
+				regExpString+=rangeString;
+			}
 		}
-		details+="\n";
+		details+=regExpString+"\n";
 
 
 		// Now, shorten the regexp by sacrificing some characters that will not be used as tokens.
@@ -676,7 +699,7 @@ RegPack.prototype = {
 		// For instance, [A-K] is shorter than [A-CG-K] but loses D,E,F as potential tokens
 		// The process is repeated while there are enough tokens left.
 		var margin = availableCharactersCount - packerData.tokenCount;
-		var regExpString = "";
+		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
 		while (true) { // do not stop on margin==0, the next step may cost zero
 			var bestBlockIndex=[];
 			var bestGain = -999;
@@ -685,7 +708,7 @@ RegPack.prototype = {
 			for (i=0;i<usedCharacters.length-1;++i) {
 				var currentBlock = usedCharacters[i];
 				var nextBlock = usedCharacters[i+1];
-				var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1);
+				var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1, delimiterCode);
 				var gain = currentBlock.size+nextBlock.size-3;
 				// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
 				if (currentBlock.first != currentBlock.last) {
@@ -705,7 +728,7 @@ RegPack.prototype = {
 				// this helps getting rid of expensive characters such as ]
 				if (i<usedCharacters.length-2) {
 					var nextYetBlock = usedCharacters[i+2];
-					cost += nextYetBlock.first - nextBlock.last - 1  - this.countForbiddenCharacters(nextBlock.last+1, nextYetBlock.first-1);
+					cost += nextYetBlock.first - nextBlock.last - 1  - this.countForbiddenCharacters(nextBlock.last+1, nextYetBlock.first-1, delimiterCode);
 					gain += nextYetBlock.size;
 					// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
 					gain += this.stringHelper.writeCharToRegexpCharClass(nextBlock.last).length-1;
@@ -763,7 +786,7 @@ RegPack.prototype = {
 		for (var i=0;i<usedCharacters.length;++i)
 		{
 			while (charIndex<usedCharacters[i].first) {
-				if (!this.isForbiddenCharacter(charIndex)) {
+				if (!this.isForbiddenCharacter(charIndex) &&  charIndex!=packerData.packedStringDelimiter.charCodeAt(0)) {
 					tokenString+=String.fromCharCode(charIndex);
 				}
 				++charIndex;
@@ -785,14 +808,17 @@ RegPack.prototype = {
 			thirdStageOutput = matchedString+token+thirdStageOutput.split(matchedString).join(token);
 		}
 
+		// escape the string delimiter present in the code
+		var checkedString = thirdStageOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
+
 		// add the unpacking code to the compressed string
-		var checkedString = thirdStageOutput;
-		c=thirdStageOutput.split('"').length<thirdStageOutput.split("'").length?(B='"',/"/g):(B="'",/'/g);
-		thirdStageOutput='for('+packerData.packedCodeVarName+'='+B+thirdStageOutput.replace(c,'\\'+B)+B;
+		thirdStageOutput='for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+checkedString+packerData.packedStringDelimiter;
 		thirdStageOutput+=';G=/['+regExpString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
 		var resultSize = this.getByteLength(thirdStageOutput);
 
+		// check that unpacking the string yields the original code
 		details+="------------------------\nFinal check : ";
+		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,"g"), packerData.packedStringDelimiter);		
 		var regToken = new RegExp("["+regExpString+"]","");
 		for(var token="" ; token = regToken.exec(checkedString) ; ) {
 			var k = checkedString.split(token);
