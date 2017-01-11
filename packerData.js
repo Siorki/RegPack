@@ -27,27 +27,24 @@ function PackerData(name, dataString) {
 	this.packedCodeVarName='_'; // name of the variable created to hold the packed code
 	this.containedStrings=[]; // all strings inside the input code
 	this.packedStringDelimiter='"'; // ', " or ` around the packed string
+	this.thermalMapping=[]; // strings mapping for each compression step, including preprocessing
 	this.result= new Array;
 }
 
 
 /**
- * Creates a clone of a PackerData object
- * changing only the input, log, and name.
- *
- * Member variables added during the packing stage(escapedInput, matchesLookup)
- * are not copied.
+ * Creates a clone of a PackerData object changing only the name.
+ * Copies all member variables, except those added during the packing stage(escapedInput, matchesLookup)
+ * Contents and log are copied as well
  *
  * @param packerData Original object to clone
  * @param nameSuffix Suffix appended to the name of the clone
- * @param newContents Replacement contents for the clone
- * @param newLog Replacement log for the clone
 */
-PackerData.clone = function(packerData, nameSuffix, newContents, newLog) {
+PackerData.clone = function(packerData, nameSuffix) {
 	var clone = new PackerData;
 	clone.name = packerData.name + nameSuffix;
-	clone.contents = newContents;
-	clone.log = newLog;
+	clone.contents = packerData.contents;
+	clone.log = packerData.log;
 	clone.environment = packerData.environment;
 	clone.interpreterCall = packerData.interpreterCall;
 	clone.wrappedInit = packerData.wrappedInit;
@@ -55,6 +52,7 @@ PackerData.clone = function(packerData, nameSuffix, newContents, newLog) {
 	clone.packedCodeVarName = packerData.packedCodeVarName;
 	clone.containedStrings = packerData.containedStrings.slice();
 	clone.packedStringDelimiter = packerData.packedStringDelimiter;
+	clone.thermalMapping=packerData.thermalMapping.slice();
 	clone.result = new Array;
 	return clone;
 }

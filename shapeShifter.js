@@ -94,16 +94,9 @@ ShapeShifter.prototype = {
 		//  - method and property
 		// then store the results in the inputList
 		if (options.hash2DContext) {
-			for (var count=inputList.length, i=0; i<count; ++i)
-			{
-				var result = this.preprocess2DContext(inputList[i], options);
-				if (result) {
-					var methodHashedData = PackerData.clone(inputList[i], " 2D(methods)", result[0][1], result[0][2]);
-					inputList.push(methodHashedData);
-					
-					var propertyHashedData = PackerData.clone(inputList[i], " 2D(properties)", result[1][1], result[1][2]);
-					inputList.push(propertyHashedData);
-				}
+			for (var count=inputList.length, i=0; i<count; ++i) {
+				var newBranches = this.preprocess2DContext(inputList[i], options);
+				inputList.push(...newBranches); // ES6 syntax : concatenate arrays
 			}
 		}
 		
@@ -112,31 +105,17 @@ ShapeShifter.prototype = {
 		//   - as above, plus replace the definitions of constants with their values (magic numbers)
 		//   - hash and replace method and property names
 		if (options.hashWebGLContext) {
-			for (var count=inputList.length, i=0; i<count; ++i)
-			{
-				var result = this.preprocessWebGLContext(inputList[i], options);
-				if (result) {
-					var methodHashedData = PackerData.clone(inputList[i], " WebGL(methods)", result[0][1], result[0][2]);
-					inputList.push(methodHashedData);
-					
-					var constantHashedData = PackerData.clone(inputList[i], " WebGL(methods+constants)", result[1][1], result[1][2]);
-					inputList.push(constantHashedData);
-
-					var propertyHashedData = PackerData.clone(inputList[i], " WebGL(properties)", result[2][1], result[2][2]);
-					inputList.push(propertyHashedData);
-				}
+			for (var count=inputList.length, i=0; i<count; ++i) {
+				var newBranches = this.preprocessWebGLContext(inputList[i], options);
+				inputList.push(...newBranches); // ES6 syntax : concatenate arrays
 			}
 		}
 
 		// for AudioContexts, method hashing only
 		if (options.hashAudioContext) {
-			for (var count=inputList.length, i=0; i<count; ++i) 
-	 		{
-				var result = this.preprocessAudioContext(inputList[i].contents, options.varsNotReassigned, inputList[i].log);
-				if (result) {
-					var audioHashedData = PackerData.clone(inputList[i], " Audio", result[1], result[2]);
-					inputList.push(audioHashedData);
-				}	
+			for (var count=inputList.length, i=0; i<count; ++i) {
+				var newBranches = this.preprocessAudioContext(inputList[i], options.varsNotReassigned);
+				inputList.push(...newBranches); // ES6 syntax : concatenate arrays
 			}
 		}
 		inputList[0].name="unhashed";
@@ -340,22 +319,19 @@ ShapeShifter.prototype = {
 	 * even if the preprocessing actually lenghtened the string.
 	 * 
 	 *
-	 * @param inputData (in/out) PackerData structure containing setup data and the code to preprocess
-	 * @param options options set, see below for use details
+	 * @param inputData (constant) PackerData structure containing setup data and the code to preprocess 
+	 * @param options (constant) options set, see below for use details
 	 * Options used are :
 	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
 	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
 	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
-	 * @return the result array, or false if no 2d context definition is found in the code.
+	 * @return an array containing branched (and hashed) PackerData, empty if no 2d context definition is found in the code.
 	 */
 	preprocess2DContext : function(inputData, options) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
-		var input = inputData.contents;
-		var initialLog = inputData.log;
 		var variableName = (options.contextType==0?options.contextVariableName:false);
 		var varsNotReassigned = options.varsNotReassigned;
-		initialLog += "----------- Hashing methods/properties for 2D context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
@@ -364,6 +340,7 @@ ShapeShifter.prototype = {
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
+		var input = inputData.contents;
 		var declarations = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(['"]2d['"]\)/gi);
 		if (declarations) {
 			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
@@ -380,11 +357,19 @@ ShapeShifter.prototype = {
 		if (objectNames.length) {
 			// obtain the list of properties in a 2D context from the ContextDescriptor
 			var referenceProperties = this.contextDescriptor.canvas2DContextDescription.properties;
-			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
-			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
-			return [hashedCodeM, hashedCodeP];
+
+			var methodHashedData = PackerData.clone(inputData, " 2D(methods)");
+			methodHashedData.log += "----------- Hashing methods for 2D context -----------\n";
+			// output stored in methodHashedData
+			this.renameObjectMethods(methodHashedData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned);
+			
+			var propertyHashedData = PackerData.clone(inputData, " 2D(properties)");
+			propertyHashedData.log += "----------- Hashing properties for 2D context -----------\n";
+			// output stored in propertyHashedData
+			this.hashObjectProperties(propertyHashedData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned);
+			return [methodHashedData, propertyHashedData];
 		}
-		return false;
+		return [];
 	},
 
 	/**
@@ -399,22 +384,20 @@ ShapeShifter.prototype = {
 	 *  - second one has method hashing + GL constants replaced by their value
 	 *  - third one has method + property renaming
 	 *
-	 * @param inputData (in/out) PackerData structure containing setup data and the code to preprocess
-	 * @param options options set, see below for use details
+	 * @param inputData (constant) PackerData structure containing setup data and the code to preprocess
+	 * @param options (constant) options set, see below for use details
 	 * Options used are :
 	 *  - contextType : type of context provided by shim : 0 for 2D, 1 for GL
 	 *  - contextVariableName : the variable holding the context if provided by shim, false otherwise
 	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
-	 * @return the result array, or false if no webgl context definition is found in the code.
+	 * @return an array containing branched (and hashed) PackerData, empty if no WebGL context definition is found in the code.
 	 */
 	preprocessWebGLContext : function(inputData, options) {
 		// Obtain all context definitions (variable name and location in the code)
 		var objectNames = [], objectOffsets = [], objectDeclarationLengths = [], searchIndex = 0;
 		var input = inputData.contents;
-		var initialLog = inputData.log;
 		var variableName = options.contextType==1?options.contextVariableName:false;
 		var varsNotReassigned = options.varsNotReassigned;
-		initialLog += "----------- Hashing methods/properties for GL context -----------\n";
 		// Start with the preset context, if any
 		if (variableName)
 		{
@@ -437,21 +420,29 @@ ShapeShifter.prototype = {
 		}
 			
 		if (objectNames.length) {
-			// list of properties in a 2D context
+			// list of properties in a GL context
 			var referenceProperties = this.contextDescriptor.canvasGLContextDescription.properties;
-		
-			// method only hashing
-			var hashedCodeM = this.renameObjectMethods(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);
-			
-			// builds on former, replaces constants as well
-			var hashedCodeMC = this.replaceWebGLconstants(hashedCodeM[1], objectNames, this.contextDescriptor.canvasGLContextDescription.constants,  hashedCodeM[2]);
-			
-			// method and property hashing
-			var hashedCodeP = this.hashObjectProperties(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog);0
-			return [hashedCodeM, hashedCodeMC, hashedCodeP];
+	
+			var methodHashedData = PackerData.clone(inputData, " WebGL(methods)");
+			methodHashedData.log += "----------- Hashing methods for GL context -----------\n";
+			// output stored in methodHashedData
+			this.renameObjectMethods(methodHashedData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned);
+
+			// elaborate on the previous result : replace GL constants with values
+			var constantHashedData = PackerData.clone(methodHashedData, " WebGL(methods+constants)");
+			constantHashedData.log += "----------- Hashing methods + replacing constants for GL context -----------\n";
+			// output stored in constantHashedData
+			this.replaceWebGLconstants(constantHashedData, objectNames, this.contextDescriptor.canvasGLContextDescription.constants);
+
+			var propertyHashedData = PackerData.clone(inputData, " WebGL(properties)");
+			propertyHashedData.log += "----------- Hashing properties for GL context -----------\n";
+			// output stored in propertyHashedData
+			this.hashObjectProperties(propertyHashedData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned);
+	
+			return [methodHashedData, constantHashedData, propertyHashedData];
 		}
 
-		return false;
+		return [];
 	},
 	
 	/**
@@ -461,17 +452,14 @@ ShapeShifter.prototype = {
 	 * even if the replacement actually lenghtened the string.
 	 * Only the constant values in CAPITALS are replaced. Other properties and methods are untouched.
 	 *
-	 * @param input the code to perform replacement on
+	 * @param inputData (in/out) PackerData structure containing setup data and the code to preprocess
 	 * @param objectNames array containing variable names of context objects (mandatory)
 	 * @param referenceConstants : object containing all constants of the GL context
-	 * @param initialLog : the action log, new logs will be appended	 
-	 * @return an array [length, output, user message]
+	 * @return nothing - output is stored in parameter inputData
 	 */
-	replaceWebGLconstants : function (input, objectNames, referenceConstants, initialLog)
-	{
-		var output = input, details=initialLog;
-		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
-		{
+	replaceWebGLconstants : function (inputData, objectNames, referenceConstants) {
+		var output = inputData.contents, details=inputData.log;
+		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
 			var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\.([0-9A-Z_]*)[^\\w\\d_(]","g");
 			var constantsInUse=[];
 			var result=exp.exec(output);
@@ -494,8 +482,10 @@ ShapeShifter.prototype = {
 			}
 		}
 		details+="\n";
-		return [this.getByteLength(output), output, details];
 		
+		// output stored in inputData parameter
+		inputData.contents = output;
+		inputData.log = details;
 	},
 	
 	/**
@@ -505,12 +495,11 @@ ShapeShifter.prototype = {
 	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 * even if the preprocessing actually lenghtened the string.
 	 *
-	 * @param input the code to preprocess
+	 * @param inputData (constant) PackerData structure containing the code to refactor and setup 
 	 * @param varsNotReassigned boolean array[128], true to keep name of variable
-	 * @param initialLog : the action log, new logs will be appended	 
-	 * @return the result array, or false if no AudioContext definition is found in the code.
+	 * @return an array containing branched (and hashed) PackerData, empty if no AudioContext definition is found in the code.
 	 */
-	preprocessAudioContext : function(input, varsNotReassigned, initialLog) {
+	preprocessAudioContext : function(inputData, varsNotReassigned) {
 		// list of properties in an AudioContext
 		var referenceProperties = this.contextDescriptor.audioContextDescription.properties;
 
@@ -520,8 +509,9 @@ ShapeShifter.prototype = {
 		var objectOffset = 0;
 		var replacementOffset = 0;
 		var objectName = "";
-		var details = initialLog;
-		details += "----------- Hashing methods for AudioContext --------------------\n";
+		var methodHashedData = PackerData.clone(inputData, " Audio");
+		var input = methodHashedData.contents;
+		methodHashedData.log += "----------- Hashing methods for AudioContext --------------------\n";
 
 		// direct instanciation of an AudioContext
 		// var c = new AudioContext()
@@ -568,10 +558,7 @@ ShapeShifter.prototype = {
 				objectName = replacementOffset>webkitReplacementOffset ? resultWebkit[1] : objectName ;
 				
 				// perform the replacement for the latter object first, so the offset of the former is not changed
-
-				var halfReplaced =this.renameObjectMethods(input, [secondObjectName], [secondReplacementOffset], [0], referenceProperties, varsNotReassigned, details);
-				input = halfReplaced[1];
-				details = halfReplaced[2];
+				this.renameObjectMethods(methodHashedData, [secondObjectName], [secondReplacementOffset], [0], referenceProperties, varsNotReassigned);
 			}
 		}
 		// direct instanciation of the appropriate context
@@ -617,10 +604,10 @@ ShapeShifter.prototype = {
 		}
 		
 		if (replacementOffset>0) {
-			var preprocessedCode = this.renameObjectMethods(input, [objectName], [replacementOffset], [0], referenceProperties, varsNotReassigned, details);
-			return preprocessedCode;
+			this.renameObjectMethods(methodHashedData, [objectName], [replacementOffset], [0], referenceProperties, varsNotReassigned);
+			return [methodHashedData];
 		}
-		return false;
+		return [];
 	},
 	
 
@@ -646,19 +633,18 @@ ShapeShifter.prototype = {
 	 *
  	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 *
-	 * @param input : the string to pack
+	 * @param inputData (in/out) PackerData structure containing the code to refactor and setup 
 	 * @param objectNames : array containing variable names of context objects, whose methods to rename in the source string
 	 * @param objectOffsets : array, in the same order, of character offset to the beginning of the object declaration. Zero if defined outside (shim)
 	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
 	 * @param referenceProperties : an array of strings containing property names for the appropriate context type
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
-	 * @param initialLog : the action log, new logs will be appended
 	 * @return the result of the renaming as an array [output length, output string, informations]
 	 */
-	renameObjectMethods : function(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog)
+	renameObjectMethods : function(inputData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned)
 	{
-				
-		var details = initialLog || '';
+		var input = inputData.contents;
+		var details = inputData.log;
 		var methodsInUseByContext=[];
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
 		{
@@ -850,7 +836,9 @@ ShapeShifter.prototype = {
 		output+=(declarationLength==0?";":"");
 		output+=hashedCode.substr(offset+declarationLength);
 		
-		return [this.getByteLength(output), output, details];
+		// output stored in inputData parameter
+		inputData.contents = output;
+		inputData.log = details;
 	},
 
 	
@@ -877,18 +865,18 @@ ShapeShifter.prototype = {
 	 *
  	 * Returns an array in the same format as the compression methods : [output length, output string, informations],
 	 *
-	 * @param input : the string to pack
+	 * @param inputData (in/out) PackerData structure containing the code to refactor and setup 
 	 * @param objectNames : array containing variable names of context objects, whose methods to rename in the source string
 	 * @param objectOffsets : array, in the same order, of character offset to the beginning of the object declaration. Zero if defined outside (shim)
 	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
 	 * @param referenceProperties : an array of strings containing property names for the appropriate context type
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
-	 * @param initialLog : the action log, new logs will be appended
 	 * @return the result of the renaming as an array [output length, output string, informations]
 	 */
-	hashObjectProperties : function(input, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned, initialLog)
+	hashObjectProperties : function(inputData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned)
 	{				
-		var details = initialLog || '';
+		var input = inputData.contents;
+		var details = inputData.log;
 		var propertiesInUseByContext=[];
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex)
 		{
@@ -1082,7 +1070,9 @@ ShapeShifter.prototype = {
 		output+=(declarationLength==0?";":"");
 		output+=hashedCode.substr(offset+declarationLength);
 		
-		return [this.getByteLength(output), output, details];
+		// output stored in inputData parameter
+		inputData.contents = output;
+		inputData.log = details;
 	},
 
 	
