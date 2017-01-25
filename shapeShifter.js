@@ -1,6 +1,7 @@
 // Node.js init
 if (typeof require !== 'undefined') {
 	var PackerData = require("./packerData");
+	var StringHelper = require("./stringHelper");
  	var ContextDescriptor = require("./contextDescriptor_node");
 }
 
@@ -16,6 +17,7 @@ if (typeof require !== 'undefined') {
 function ShapeShifter() {
 	
 	this.contextDescriptor = new ContextDescriptor();
+	this.stringHelper = StringHelper.getInstance();
 	
 	// hashing functions for method and property renaming
 	this.hashFunctions = [
@@ -56,6 +58,7 @@ ShapeShifter.prototype = {
 	 *       -  varsNotReassigned : string or array listing all protected variables (whose name will not be modified)
 	 *       -  wrapInSetInterval : true to wrap the unpacked code in a setInterval() call instead of eval()
 	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
+	 *       -  useES6 : true to add ES6 constructs to the code, false otherwise
 	 */
 	preprocess : function(input, options) {
 	
@@ -78,14 +81,23 @@ ShapeShifter.prototype = {
 		
 		var inputData = new PackerData ('', input);
 		if (options.withMath) {
-			inputData.contents = input.replace(/Math\./g, '');
-			inputData.environment = 'with(Math)';
+			// call module : Define environment
+			this.defineEnvironment(inputData);
 		}
 		
 		var inputList = [ inputData ];
 		if (options.wrapInSetInterval) {
-			// method stores the refactored code, log and setup change in inputData
+			// call module : wrap with setInterval
 			this.refactorToSetInterval(inputData, options);
+		} else {
+			// map the bytes of the default interpreter call "eval(_)" to the entire code
+			var envMapping = [ { inLength : inputData.contents.length, outLength : inputData.contents.length, complete : false},
+				   { chapter  : 4, 
+					 rangeIn  : [0, inputData.contents.length],
+					 rangeOut : [0, inputData.interpreterCall.length]
+				   }  ];
+			inputData.thermalMapping.push(envMapping);
+
 		}
 		
 		
@@ -122,15 +134,29 @@ ShapeShifter.prototype = {
 
 		for (var i=0; i<inputList.length; ++i) {
 			this.identifyStrings(inputList[i], options);
+			// call module : quote strings
 			this.quoteStrings(inputList[i], options);
 			if (options.reassignVars) {
-				// method stores the refactored code, log and setup change in inputList[i]
+				// call module : reassign variables
 				this.reassignVariableNames(inputList[i], options);
 			}
 		}
 		return inputList;
 	},
 
+	/**
+	 * Modifies the environment execution of the unpacked code,
+	 * wrapping it into with(Math).
+	 * Removes all references to Math. in the input code
+	 * @param inputData (in/out) PackerData structure containing the code to refactor and setup 
+	 */
+	defineEnvironment : function(inputData) {
+		inputData.environment = 'with(Math)';
+		var envMapping = { chapter : 2, rangeOut : [0, inputData.environment.length] };
+		inputData.contents = this.stringHelper.matchAndReplaceAll(inputData.contents, false, 'Math.', '', '', '', envMapping, inputData.thermalMapping);
+	},
+	
+	
 	/**
 	 * Rewrites the input code so that it can entirely be executed inside
 	 * a setInterval() loop without prior initialization.
@@ -166,11 +192,14 @@ ShapeShifter.prototype = {
 		// implementation for #44 : match arrow function syntax (new in ES6)		
 		// regular expression matches pre-ES5 syntax : function(params){...}
 		var loopMatch = input.match(/setInterval\(function\(([\w\d.=,]*)\){/);
+		var functionDeclaration = "function(";
 		if (!loopMatch) { // regular expression matches ES6 syntax : (params)=>{...}
 			loopMatch = input.match(/setInterval\(\(([\w\d.=,]*)\)=>{/);
+			functionDeclaration = ")=>";
 		}
 		if (!loopMatch) { // regular expression matches ES6 syntax : one_param=>{...}
-			loopMatch = input.match(/setInterval\(([\w\d.]*)=>{/);
+			loopMatch = input.match(/setInterval\(([\w\d.]*)(=>){/);
+			functionDeclaration = "=>";
 		}
 
 		if (loopMatch) {
@@ -207,11 +236,13 @@ ShapeShifter.prototype = {
 			
 			// Strip the declaration of the time variable from the init code,
 			// as it will be defined in the unpacking routine instead.
+			var timeDefinitionBegin = initCode.length;
+			var timeDefinitionEnd = timeDefinitionBegin;
 			var timeDefinitionExp = new RegExp("(^|[^\\w$])"+timeVariableName+"=","g");
 			var timeDefinitionMatch=timeDefinitionExp.exec(initCode);
 			if (timeDefinitionMatch) {
-				var timeDefinitionBegin = timeDefinitionMatch.index+timeDefinitionMatch[1].length;
-				var timeDefinitionEnd = timeDefinitionBegin+2;
+				timeDefinitionBegin = timeDefinitionMatch.index+timeDefinitionMatch[1].length;
+				timeDefinitionEnd = timeDefinitionBegin+2;
 				
 				// Check if we can strip more than "t=" depending on what comes before and after :
 				//  - Brackets means no : the declaration is used as an argument in a function
@@ -250,6 +281,7 @@ ShapeShifter.prototype = {
 					switch (input.charCodeAt(index)) {
 						case 34 : // "
 						case 39 : // '
+						case 96 : // `
 							inString = input.charCodeAt(index);
 							break;
 						case 123 : // {
@@ -278,11 +310,11 @@ ShapeShifter.prototype = {
 				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
 				//   - if(!t++){/*init code*/} if it is created only for the test
 				var wrapperCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){";
+				var mainLoopCode = input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				// Redefine the "offset zero" of our transformed code,
 				// used to hash methods/properties of contexts provided by shim
 				inputData.initialDeclarationOffset = wrapperCode.length;
-				initCode=wrapperCode+initCode+finalCode+"}";
-				output = initCode+paramsCode+input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
+				output = wrapperCode + initCode + finalCode + "}" + paramsCode + mainLoopCode;
 				
 				inputData.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
 				inputData.wrappedInit = timeVariableName+'=0';
@@ -295,7 +327,53 @@ ShapeShifter.prototype = {
 					inputData.wrappedInit = "";
 					details += timeVariableName+" initialized as parameter to setInterval, kept as is.\n";
 				}
-			 } else {	// delayMatch === false
+				
+				var functionDeclarationOffset = loopMatch.index+loopMatch[0].indexOf(functionDeclaration);
+				// Record the change in the thermal transform
+				var transform = [ { inLength : input.length, outLength : output.length, complete : true } ];
+				// "if(!t){" : mapped to "function("
+				transform.push ( { chapter : 0, rangeIn : [functionDeclarationOffset, functionDeclaration.length], rangeOut : [0, wrapperCode.length] });
+				var rangeOutBegin = wrapperCode.length;
+				// code before the main loop, before the time variable declaration, mapped to itself
+				transform.push ( { chapter : 0, rangeIn : [0, timeDefinitionBegin], rangeOut : [rangeOutBegin, timeDefinitionBegin] });
+				rangeOutBegin += timeDefinitionBegin;
+				if (timeDefinitionMatch) {
+					// code before the main loop, after the time variable declaration, mapped to itself
+					// may omit the final "," or ";", if any, that is eliminated = mapped to nothing
+					var initSecondHalfLength = initCode.length-timeDefinitionBegin;
+					transform.push ( { chapter : 0, rangeIn : [timeDefinitionEnd, initSecondHalfLength], rangeOut : [rangeOutBegin, initSecondHalfLength] });
+					rangeOutBegin += initSecondHalfLength;
+				}
+				if (finalCode.length) {
+					// code after the main loop, mapped to itself
+					transform.push ( { chapter : 0, rangeIn : [index+delayMatch[0].length, finalCode.length], rangeOut : [rangeOutBegin, finalCode.length] });
+					rangeOutBegin += finalCode.length;
+				}
+				// "}" : mapped to final "}" of the main loop
+				transform.push ( { chapter : 0, rangeIn : [index-1, 1], rangeOut : [rangeOutBegin, 1] });
+				++rangeOutBegin;
+				// parameters of the loop function, mapped to themselves
+				var paramsOffset = loopMatch.index+loopMatch[0].indexOf(loopMatch[1]);
+				transform.push ( { chapter : 0, rangeIn : [paramsOffset, loopMatch[1].length], rangeOut : [rangeOutBegin, paramsCode.length] });
+				rangeOutBegin += paramsCode.length;
+				// code in the loop function, mapped to itself
+				transform.push ( { chapter : 0, rangeIn : [loopMatch.index+loopMatch[0].length, mainLoopCode.length], rangeOut : [rangeOutBegin, mainLoopCode.length] });
+				// "setInterval(" : map to original declaration
+				var blockLength = "setInterval(".length;
+				transform.push ( { chapter : 3, rangeIn : [loopMatch.index, blockLength], rangeOut : [0, blockLength] });
+				// "_" : mapped to "function("
+				transform.push ( { chapter : 3, rangeIn : [functionDeclarationOffset, functionDeclaration.length], rangeOut : [blockLength, 1] });
+				// ",nn)" : map to original declaration
+				transform.push ( { chapter : 3, rangeIn : [index, delayMatch[0].length], rangeOut : [blockLength+1, delayMatch[1].length+2] });				
+				// time declaration variable "t=0" : map to original declaration if any, to function declaration otherwise
+				if (timeDefinitionMatch) {
+					transform.push ( { chapter : 4, rangeIn : [timeDefinitionBegin, timeDefinitionEnd-timeDefinitionBegin], rangeOut : [0, inputData.wrappedInit.length] });				
+				} else {
+					transform.push ( { chapter : 4, rangeIn : [functionDeclarationOffset, functionDeclaration.length], rangeOut : [0, inputData.wrappedInit.length] });				
+				}
+				inputData.thermalMapping.push(transform);
+				
+			} else {	// delayMatch === false
 				details += "Unable to find delay for setInterval, module skipped.\n";
 			}
 			
@@ -475,7 +553,8 @@ ShapeShifter.prototype = {
 				if (constantsInUse[index] in referenceConstants) {
 					var constant = referenceConstants[constantsInUse[index]];
 					var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+constantsInUse[index]+"(^|[^\\w$])","g");						
-					output = output.replace(exp, "$1"+constant+"$2");
+					// output = output.replace(exp, "$1"+constant+"$2");
+					output = this.stringHelper.matchAndReplaceAll(output, exp, objectNames[contextIndex]+"."+constantsInUse[index], constant, "", "", 0, inputData.thermalMapping);
 					// show the renaming in the details
 					details += constantsInUse[index] + " -> " + constant + "\n";
 				}
@@ -639,7 +718,7 @@ ShapeShifter.prototype = {
 	 * @param objectDeclarationLengths : array, in the same order, of lengths of the object declaration, starting at offset. Zero if defined outside (shim)
 	 * @param referenceProperties : an array of strings containing property names for the appropriate context type
 	 * @param varsNotReassigned : boolean array[128], true to keep name of variable
-	 * @return the result of the renaming as an array [output length, output string, informations]
+	 * @return true if the replacement was performed (the gain was >= 0), false otherwise (net loss, replacement cancelled)
 	 */
 	renameObjectMethods : function(inputData, objectNames, objectOffsets, objectDeclarationLengths, referenceProperties, varsNotReassigned)
 	{
@@ -721,7 +800,8 @@ ShapeShifter.prototype = {
 		// bail out early if no gain. Keep if just par, to see how compression behaves
 		if (bestTotalScore < 0) {
 			details += "Best hash loses "+(-bestTotalScore)+" bytes, skipping.\n";
-			return [this.getByteLength(input), input, details];
+			inputData.log = details;
+			return false;
 		}
 		
 		// best hash function (based on byte gain) found. Apply it
@@ -771,7 +851,8 @@ ShapeShifter.prototype = {
 							// The initial \b avoids triggering if one context has a name
 							// ending in another context's name (such as 'c' and 'cc')
 							var exp = new RegExp("\\b"+objectNames[contextIndex]+"\\."+methodsInUse[methodIndex]+"\\(","g");						
-							hashedCode = hashedCode.replace(exp, objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]]+"(");
+							//hashedCode = hashedCode.replace(exp, objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]]+"(");
+							hashedCode = this.stringHelper.matchAndReplaceAll(hashedCode, exp, methodsInUse[methodIndex], forwardLookup[methodsInUse[methodIndex]], "", "", 0, inputData.thermalMapping);
 
 							// show the renaming in the details, for used methods only
 							details += objectNames[contextIndex]+"."+forwardLookup[methodsInUse[methodIndex]] + " -> " + methodsInUse[methodIndex] + "\n";
@@ -810,7 +891,7 @@ ShapeShifter.prototype = {
 				}
 			}
 		}
-		var output = hashedCode.substr(0, offset);
+		var outputIntro = hashedCode.substr(0, offset);
 		
 		// Insert the hashing/renaming loop in the code.
 		// If the context definition is not included (js1k shim for instance), the loop is prepended to the code and ends with ";"
@@ -820,25 +901,68 @@ ShapeShifter.prototype = {
 		// The ending separator is kept, unless it is a comma ",", in which case it is replaced with a semicolon ";"
 		// (to avoid including the trailing code in the loop)
 		var declarationLength = objectDeclarationLengths[loopContext];
-		output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
+		var outputInitBlock1 = "for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:"");
+		var outputInitBlock2 = (declarationLength==0?"":hashedCode.substr(offset, declarationLength));
+		var outputInitBlock3 = ")";
+		//output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
 		for (var contextIndex=0; contextIndex<objectNames.length; ++contextIndex) {
 			if (bestScoreByContext[contextIndex]>=0) {	
-				output+=objectNames[contextIndex]+"["+expression+"]=";
-				needsComma = true;
+				outputInitBlock3+=objectNames[contextIndex]+"["+expression+"]=";
 			}
 		}		
-		output+=objectNames[shortestContext]+"["+indexName+"]";
+		outputInitBlock3+=objectNames[shortestContext]+"["+indexName+"]";
 		if (hashedCode[offset+declarationLength]==",") {
 			// replace the trailing "," with ";" as explained above
-			output+=";";
+			outputInitBlock3+=";";
 			++declarationLength;
 		}
-		output+=(declarationLength==0?";":"");
-		output+=hashedCode.substr(offset+declarationLength);
+		outputInitBlock3+=(declarationLength==0?";":"");
+		var outputMain = hashedCode.substr(offset+declarationLength);
+		var output = outputIntro + outputInitBlock1 + outputInitBlock2 + outputInitBlock3 + outputMain;
+		
+		// Record the renaming loop in the thermal transform
+		var transform = [ { inLength : hashedCode.length, outLength : output.length, complete : true } ];
+		if (offset) {
+			// code before the context declaration and renaming loop, kept unchanged
+			transform.push ( { chapter : 0, rangeIn : [0, offset], rangeOut : [0, offset] });
+		}
+		var rangeOutBegin = offset;
+		if (declarationLength) {	// context declaration done inside the code
+			// "for (i in " : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset+declarationLength, outputMain.length], 
+							   rangeOut : [offset, outputInitBlock1.length] });
+			rangeOutBegin += outputInitBlock1.length;
+			// "context=canvas.getContext('2d')" : map as is
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset, outputInitBlock2.length],
+							   rangeOut : [rangeOutBegin, outputInitBlock2.length] });
+			rangeOutBegin += outputInitBlock2.length;
+			// ")c[...]=c[i]" : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset+declarationLength, outputMain.length], 
+							   rangeOut : [rangeOutBegin, outputInitBlock3.length] });
+			rangeOutBegin += outputInitBlock3.length;
+		
+		} else {	// context declaration done beforehand (in the shim)
+			// "for (i in c)c[...]=c[i];" : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset, outputMain.length], 
+							   rangeOut : [offset, outputInitBlock1.length+outputInitBlock2.length+outputInitBlock3.length] });
+			rangeOutBegin += outputInitBlock1.length+outputInitBlock2.length+outputInitBlock3.length;
+		}
+		// code using the hashed contexts
+		transform.push( { 	chapter : 0, 
+							rangeIn : [offset+declarationLength, outputMain.length], 
+							rangeOut : [rangeOutBegin, outputMain.length] });
+		
+		inputData.thermalMapping.push(transform);
+		
 		
 		// output stored in inputData parameter
 		inputData.contents = output;
 		inputData.log = details;
+		return true;
 	},
 
 	
@@ -1017,8 +1141,11 @@ ShapeShifter.prototype = {
 						// The initial character (or line start) avoids triggering if one context has a name
 						// ending in another context's name (such as 'c' and 'cc')
 						var exp = new RegExp("(^|[^\\w$])"+objectNames[contextIndex]+"\\."+propertiesInUse[propertyIndex]+"($|\\W)","g");						
-						hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"["+objectNames[shortestContext]+"."+forwardLookup[propertiesInUse[propertyIndex]]+"]$2");
-
+						var originalText = "."+propertiesInUse[propertyIndex];
+						var replacementText = "["+objectNames[shortestContext]+"."+forwardLookup[propertiesInUse[propertyIndex]]+"]";
+						//hashedCode = hashedCode.replace(exp, "$1"+objectNames[contextIndex]+"["+objectNames[shortestContext]+"."+forwardLookup[propertiesInUse[propertyIndex]]+"]$2");
+						hashedCode = this.stringHelper.matchAndReplaceAll(hashedCode, exp, originalText, replacementText, "", "", 0, inputData.thermalMapping);
+						
 						// show the renaming in the details, for used properties only
 						details += objectNames[contextIndex]+"."+forwardLookup[propertiesInUse[propertyIndex]] + " -> " + propertiesInUse[propertyIndex] + "\n";
 					}
@@ -1050,7 +1177,7 @@ ShapeShifter.prototype = {
 				loopContext = contextIndex;
 			}
 		}
-		var output = hashedCode.substr(0, offset);
+		var outputIntro = hashedCode.substr(0, offset);
 		
 		// Insert the hashing/renaming loop in the code.
 		// If the context definition is not included (js1k shim for instance), the loop is prepended to the code and ends with ";"
@@ -1060,16 +1187,59 @@ ShapeShifter.prototype = {
 		// The ending separator is kept, unless it is a comma ",", in which case it is replaced with a semicolon ";"
 		// (to avoid including the trailing code in the loop)
 		var declarationLength = objectDeclarationLengths[loopContext];
-		output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
-		output+=objectNames[shortestContext]+"["+expression+"]="+indexName;
+		var outputInitBlock1 = "for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:"");
+		var outputInitBlock2 = (declarationLength==0?"":hashedCode.substr(offset, declarationLength));
+		var outputInitBlock3 = ")";
+		//output+="for("+indexName+" in "+(declarationLength==0?objectNames[loopContext]:hashedCode.substr(offset, declarationLength))+")";
+		outputInitBlock3+=objectNames[shortestContext]+"["+expression+"]="+indexName;
 		if (hashedCode[offset+declarationLength]==",") {
 			// replace the trailing "," with ";" as explained above
-			output+=";";
+			outputInitBlock3+=";";
 			++declarationLength;
 		}
-		output+=(declarationLength==0?";":"");
-		output+=hashedCode.substr(offset+declarationLength);
+		outputInitBlock3+=(declarationLength==0?";":"");
+		var outputMain = hashedCode.substr(offset+declarationLength);
+		var output = outputIntro + outputInitBlock1 + outputInitBlock2 + outputInitBlock3 + outputMain;
 		
+		// Record the renaming loop in the thermal transform
+		var transform = [ { inLength : hashedCode.length, outLength : output.length, complete : true } ];
+		if (offset) {
+			// code before the context declaration and renaming loop, kept unchanged
+			transform.push ( { chapter : 0, rangeIn : [0, offset], rangeOut : [0, offset] });
+		}
+		var rangeOutBegin = offset;
+		if (declarationLength) {	// context declaration done inside the code
+			// "for (i in " : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset+declarationLength, outputMain.length], 
+							   rangeOut : [offset, outputInitBlock1.length] });
+			rangeOutBegin += outputInitBlock1.length;
+			// "context=canvas.getContext('2d')" : map as is
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset, outputInitBlock2.length],
+							   rangeOut : [rangeOutBegin, outputInitBlock2.length] });
+			rangeOutBegin += outputInitBlock2.length;
+			// ")c[...]=i" : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset+declarationLength, outputMain.length], 
+							   rangeOut : [rangeOutBegin, outputInitBlock3.length] });
+			rangeOutBegin += outputInitBlock3.length;
+		
+		} else {	// context declaration done beforehand (in the shim)
+			// "for (i in c)c[...]=i;" : map to entire hashed code
+			transform.push ( { chapter : 0, 
+							   rangeIn : [offset, outputMain.length], 
+							   rangeOut : [offset, outputInitBlock1.length+outputInitBlock2.length+outputInitBlock3.length] });
+			rangeOutBegin += outputInitBlock1.length+outputInitBlock2.length+outputInitBlock3.length;
+		}
+		// code using the hashed contexts
+		transform.push( { 	chapter : 0, 
+							rangeIn : [offset+declarationLength, outputMain.length], 
+							rangeOut : [rangeOutBegin, outputMain.length] });
+		
+		inputData.thermalMapping.push(transform);
+
+
 		// output stored in inputData parameter
 		inputData.contents = output;
 		inputData.log = details;
@@ -1541,14 +1711,29 @@ ShapeShifter.prototype = {
 		inputData.packedStringDelimiter = bestDelimiter;
 		
 		// perform replacement in strings
+		// we cannot use stringHelper.matchAndReplaceAll() as only some instances of the string are replaced in the code
+		var currentTransform = [];
 		var newInput = "", offset = 0;
 		for (var i=0; i<inputData.containedStrings.length; ++i) {
 			var currentString = inputData.containedStrings[i];
+			let intervalMapping = {	// transform : iso mapping of the space between two strings
+				chapter : 0,
+				rangeIn : [offset, currentString.begin-offset],
+				rangeOut: [newInput.length, currentString.begin-offset]
+			};
+			currentTransform.push(intervalMapping);
 			newInput += inputData.contents.substr(offset, currentString.begin-offset);
 			var newDelimiter = bestNewStringQuotes[i];
 			var currentDelimiter = String.fromCharCode(currentString.delimiter);
+			let stringMapping = { // transform : mapping of the string before / after
+				// initialize with an iso mapping
+				chapter : 0,
+				rangeIn : [currentString.begin, currentString.end-currentString.begin+1],
+				rangeOut: [newInput.length, currentString.end-currentString.begin+1]
+			};
 			if (currentString.delimiter == newDelimiter) {
-				// keep the delimiter for the current string
+				// keep the delimiter for the current string 
+				// copy as is and keep the iso mapping
 				newInput += inputData.contents.substr(currentString.begin, currentString.end-currentString.begin+1);
 			} else {
 				// replace the delimiter, escape and unescape as needed
@@ -1563,13 +1748,23 @@ ShapeShifter.prototype = {
 				details += String.fromCharCode(inputData.containedStrings[i].delimiter)+" -> "+newDelimiter+"\n";
 				inputData.containedStrings[i].begin = newInput.length;
 				inputData.containedStrings[i].delimiter = newDelimiter;
-				newInput += quote + rawString + quote;
+				var replacementString = quote + rawString + quote;
+				stringMapping.rangeOut[1] = replacementString.length;	// map to actual length
+				newInput += replacementString;
 				inputData.containedStrings[i].end = newInput.length-1;
 				
 			}
 			offset = currentString.end+1;
+			currentTransform.push(stringMapping);
+			
 		}
 		newInput += inputData.contents.substr(offset);
+		let intervalMapping = {	// transform : iso mapping of the space at the end
+				chapter : 0,
+				rangeIn : [offset, inputData.contents.length-offset],
+				rangeOut: [newInput.length, inputData.contents.length-offset]
+			};
+		currentTransform.push(intervalMapping);
 		inputData.contents = newInput;
 		
 		inputData.log+=details+"\n";		

@@ -140,6 +140,7 @@ RegPack.prototype = {
 		packerData.escapedInput = packerData.contents.replace(/\\/g,'\\\\');
 		var s = packerData.escapedInput;
 		packerData.matchesLookup = [];
+		var transform = [];
 		details='';
 		
 		// #55 : 34(") and 39(') now allowed, as long as they are not the chosen delimiter
@@ -197,7 +198,8 @@ RegPack.prototype = {
 			matches = newMatches;
 
 			// and apply the compression to the string
-			s=s.split(e).join(c)+c+e;
+			s = this.stringHelper.matchAndReplaceAll(s, false, e, c, "", c+e, 0, transform);
+			//s=s.split(e).join(c)+c+e;
 			packerData.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
 			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
 		}
@@ -252,16 +254,28 @@ RegPack.prototype = {
 			loopMemberCode = 'i';
 		}
 		
-		// escape the string delimiter present in the code
-		var packedString = s.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
+		// escape the occurrences of the string delimiter present in the code
+		var packedString = this.stringHelper.matchAndReplaceAll(s, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
+		//var packedString = s.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
 		
 		// and put everything together
-		var output = packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+packedString+packerData.packedStringDelimiter
-					+loopInitCode+packerData.packedStringDelimiter+tokens+packerData.packedStringDelimiter
-					+')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'
-					+packerData.packedCodeVarName+'=join(pop('+packerData.wrappedInit+'));'
-					+packerData.environment+packerData.interpreterCall;
-		return [this.getByteLength(output), output, details];
+		var unpackBlock1 = packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
+		var unpackBlock2 = packerData.packedStringDelimiter
+						  +loopInitCode+packerData.packedStringDelimiter+tokens+packerData.packedStringDelimiter
+						  +')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'
+						  +packerData.packedCodeVarName+'=join(pop(';
+		var unpackBlock3 = '));';
+		var envMapping = [ { inLength : packedString.length, outLength : packedString.length, complete : false},
+						   { chapter  : 1, 
+						     rangeIn  : [0, packedString.length],
+						     rangeOut : [0, unpackBlock1.length + unpackBlock2.length + unpackBlock3.length]
+						   }  ];
+		transform.push(envMapping);
+		
+		var output = unpackBlock1 + packedString + unpackBlock2 + packerData.wrappedInit + unpackBlock3
+				   + packerData.environment + packerData.interpreterCall;
+		
+		return [this.getByteLength(output), output, details, transform];
 	},
 
 	/**
@@ -293,6 +307,7 @@ RegPack.prototype = {
 	{
 
 		var details = '';
+		var transform = [];
 		// First, re-expand the packed strings so that they no longer contain any compression token
 		// since we will be storing them in a different order.
 		// Use this step to establish a dependency graph (compressed strings containing other compressed strings)
@@ -457,7 +472,9 @@ RegPack.prototype = {
 
 						var token = String.fromCharCode(tokenCode);
 						details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
-						regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
+						
+						regPackOutput = this.stringHelper.matchAndReplaceAll(regPackOutput, false, matchedString, token, matchedString+token, "", 0, transform);
+						//regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
 
 						// remove dependencies on chosen string/token
 						this.clear(packerData, matchIndex);
@@ -554,13 +571,26 @@ RegPack.prototype = {
 			}			
 		}
 
-		// escape the string delimiter present in the code
-		var checkedString = regPackOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
+		// escape the occurrences of the string delimiter present in the code
+		var checkedString = this.stringHelper.matchAndReplaceAll(regPackOutput, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
+		//var checkedString = regPackOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
 
 		// and add the unpacking code to the compressed string
-		regPackOutput='for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+checkedString+packerData.packedStringDelimiter;
-		regPackOutput+=';G=/['+tokenString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		var unpackBlock1 = 'for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
+		var unpackBlock2 = packerData.packedStringDelimiter+';G=/['+tokenString+']/.exec('+packerData.packedCodeVarName
+						  +');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift(';
+						  
+		var unpackBlock3 = '));';
+		var envMapping = [ { inLength : checkedString.length, outLength : checkedString.length, complete : false},
+						   { chapter  : 1, 
+						     rangeIn  : [0, checkedString.length],
+						     rangeOut : [0, unpackBlock1.length + unpackBlock2.length + unpackBlock3.length]
+						   }  ];
+		transform.push(envMapping);
 
+		regPackOutput = unpackBlock1 + checkedString + unpackBlock2 + packerData.wrappedInit + unpackBlock3 
+					  + packerData.environment + packerData.interpreterCall;
+ 
 		var resultSize = this.getByteLength(regPackOutput);
 
 		// check that unpacking the string yields the original code
@@ -575,7 +605,7 @@ RegPack.prototype = {
 		details+=(success ? "passed" : "failed")+".\n";
 
 
-		return [resultSize, regPackOutput, details];
+		return [resultSize, regPackOutput, details, transform];
 	},
 
 	/**
@@ -636,6 +666,7 @@ RegPack.prototype = {
 		//  - neither used as compression tokens (if there are leftovers) nor in the string
 		//    those can be included in the RegExp without affecting the output
 		var details = '';
+		var transform = [];
 		var usedCharacters = [];
 		var forbiddenCharacters = [];
 		var firstInLine = -1;
@@ -805,15 +836,28 @@ RegPack.prototype = {
 			var token = tokenString[i];
 
 			details+=token.charCodeAt(0)+"("+token+"), str = "+matchedString+"\n";
-			thirdStageOutput = matchedString+token+thirdStageOutput.split(matchedString).join(token);
+			thirdStageOutput = this.stringHelper.matchAndReplaceAll(thirdStageOutput, false, matchedString, token, matchedString+token, "", 0, transform);
+			//thirdStageOutput = matchedString+token+thirdStageOutput.split(matchedString).join(token);
 		}
 
-		// escape the string delimiter present in the code
-		var checkedString = thirdStageOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
+		// escape the occurrences of the string delimiter present in the code
+		var checkedString = this.stringHelper.matchAndReplaceAll(thirdStageOutput, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
+		//var checkedString = thirdStageOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
 
 		// add the unpacking code to the compressed string
-		thirdStageOutput='for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter+checkedString+packerData.packedStringDelimiter;
-		thirdStageOutput+=';G=/['+regExpString+']/.exec('+packerData.packedCodeVarName+');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift('+packerData.wrappedInit+'));'+packerData.environment+packerData.interpreterCall;
+		var unpackBlock1 = 'for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
+		var unpackBlock2 = packerData.packedStringDelimiter+';G=/['+regExpString+']/.exec('+packerData.packedCodeVarName
+						  +');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift(';
+		var unpackBlock3 = '));';
+		var envMapping = [ { inLength : checkedString.length, outLength : checkedString.length, complete : false},
+						   { chapter  : 1, 
+						     rangeIn  : [0, checkedString.length],
+						     rangeOut : [0, unpackBlock1.length + unpackBlock2.length + unpackBlock3.length]
+						   }  ];
+		transform.push(envMapping);
+
+		thirdStageOutput = unpackBlock1 + checkedString + unpackBlock2 + packerData.wrappedInit + unpackBlock3 
+					     + packerData.environment + packerData.interpreterCall;
 		var resultSize = this.getByteLength(thirdStageOutput);
 
 		// check that unpacking the string yields the original code
@@ -828,7 +872,7 @@ RegPack.prototype = {
 		details+=(success ? "passed" : "failed")+".\n";
 
 
-		return [resultSize, thirdStageOutput, details];
+		return [resultSize, thirdStageOutput, details, transform];
 	}
 
 };

@@ -67,6 +67,113 @@ var StringHelper = (function() {
 			}).join(''));
 		}
 		
+		/**
+		 * Replace all instances of a substring, and record the changes in a transform function
+		 * Use instead of String.replace(/.../g) to get the mapping function needed for the heatwave view.
+		 *
+		 * The matching operation is either done with a string search (set matchExp to false)
+		 * or with a regular expression that is first matched, then the originalText is
+		 * searched and replaced inside the regex match.
+		 * 
+		 * The crusher and packer can prepend and append a dictionary entry to the string.
+		 * In the mapping, this prefix or suffix is mapped to all replaced strings
+		 *
+		 * @param input input string before replacements (unmodified)
+		 * @param matchExp regular expression to search for (false to match originalText as is)
+		 * @param originalText substring to replace within the regex match
+		 * @param replacementText substring to substitute to all instances of originalText
+		 * @param prefix string to prepend to the output, mapped to all matches (use "" if none)
+		 * @param suffix string to append to the output, mapped to all matches (use "" if none)
+		 * @param extraMapping string from another chapter, mapped to all matches, not added here (false if none)
+		 * @param thermalMap array of all successive mapping functions (modified)
+		 * @return the string with all replacements performed
+		 */
+		this.matchAndReplaceAll = function(input, matchExp, originalText, replacementText, prefix, suffix, extraMapping, thermalMap) {
+			var mappingFunction = [];
+			var allRangesIn = [];
+			var output = prefix;
+			var inputPointer = 0;
+			var originalTextLength = originalText.length;
+			var replacementTextLength = replacementText.length;
+			var offset = -1;
+			if (matchExp) {
+				let nextMatch = matchExp.exec(input);
+				if (nextMatch) {
+					let offsetInMatch = nextMatch[0].indexOf(originalText);
+					offset = nextMatch.index + offsetInMatch;
+				}
+			} else {
+				offset = input.indexOf(originalText, inputPointer);
+			}
+			while (offset >= 0) {
+				if (offset>inputPointer) {
+					// there is an interval between two replaced blocks. Register it into the mapping
+					let intervalMapping = {
+						chapter : 0,
+						rangeIn : [inputPointer, offset-inputPointer],
+						rangeOut: [output.length, offset-inputPointer]
+					};
+					mappingFunction.push(intervalMapping);
+					output+= input.substring(inputPointer, offset);
+				}
+				// register the replaced text into the mapping
+				let matchMapping = {
+					chapter : 0,
+					rangeIn : [offset, originalTextLength],
+					rangeOut: [output.length, replacementTextLength]
+				};
+				mappingFunction.push(matchMapping);
+				output+= replacementText;
+				allRangesIn.push(offset, originalTextLength);
+				
+				inputPointer = offset+originalTextLength;
+				if (matchExp) {
+					let nextMatch = matchExp.exec(input);
+					if (nextMatch) {
+						let offsetInMatch = nextMatch[0].indexOf(originalText);
+						offset = nextMatch.index + offsetInMatch;
+					} else {
+						offset = -1;
+					}
+				} else {
+					offset = input.indexOf(originalText, inputPointer);
+				}
+			}
+			// text remaining at the end
+			if (inputPointer < input.length) {
+				let intervalMapping = {
+					rangeIn : [inputPointer, input.length-inputPointer],
+					rangeOut: [output.length, input.length-inputPointer]
+				};
+				mappingFunction.push(intervalMapping);
+				output+= input.substring(inputPointer);
+			}
+			// Map prefix and suffix (if any) to all replaced blocks
+			if (prefix != "") {
+				let prefixMapping = {
+					rangeIn : allRangesIn,
+					rangeOut : [0, prefix.length]
+				};
+				mappingFunction.push(prefixMapping);
+			}
+			if (suffix != "") {
+				let suffixMapping = {
+					rangeIn : allRangesIn,
+					rangeOut : [output.length, suffix.length]
+				};
+				mappingFunction.push(suffixMapping);
+			}
+			if (extraMapping) {
+				extraMapping.rangeIn = allRangesIn;
+				mappingFunction.push(extraMapping);
+			}
+			output+= suffix;
+			
+			mappingFunction.unshift({ inLength : input.length, outLength : output.length, complete:true});
+			thermalMap.push(mappingFunction);
+			
+			return output;
+		}
 	
 		/**
 		 * Returns the character matching the provided unicode value
