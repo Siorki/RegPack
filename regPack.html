@@ -9,10 +9,6 @@
   padding:5px;
 }
 
-.source {
-  box-shadow: 0px 0px 8px 1px rgb(0, 128, 255) inset;
-}
-
 .best {
   box-shadow: 0px 0px 12px 1px rgb(0, 192, 0) inset;
 }
@@ -29,13 +25,38 @@ div#output{
 	display:none;
 }
 
-div#thermalContainer{
+div#thermalColumn{
 	visibility:hidden;
 }
 
+div.dock {
+	display:flex;
+	overflow:hidden;
+}
+
+div.dockControl {
+	height:20px;
+	margin:1px;
+	border:solid #888 1px;
+	box-sizing: border-box;
+	background-image:linear-gradient(#aaa,#ddd,#eee);
+	text-align:center;
+	text-shadow:#fff 1px 1px;
+	color:#444;
+	line-height:19px;
+}
+
+div.dockControl:hover {
+	background-image:linear-gradient(#adf,#def,#eff);
+}
+
+div.dockControl:active {
+	background-image:linear-gradient(#6ce,#bdf,#cef);
+}
+
 div.column {
-	width:50%;
-	display:inline-block;
+	flex:1;
+	height:15em;
 }
 
 div.textBox {
@@ -50,6 +71,7 @@ div.textBox {
 	min-height:8em;
 }
 
+
 div#thermalView {
 	width:100%;
 	padding:1px;
@@ -57,9 +79,9 @@ div#thermalView {
 	border-color:#888 #ccc #ccc #888;
 	margin: 1px 0px 1px 0px;
 	box-sizing: border-box;
-	display:inline-block;
 	vertical-align: top;
-	min-height:8em;
+	height:14em;
+	overflow-y:scroll;
 }
 
 textarea {
@@ -73,8 +95,10 @@ textarea {
 	word-break: break-all;
 }
 
-textarea#originalString {
+textarea.source {
+    box-shadow: 0px 0px 8px 1px rgb(0, 128, 255) inset;
 	width:100%;
+	height:17em;
 }
 
 pre.topLevel {
@@ -178,14 +202,17 @@ span.thermal11 {
  	</style>
 </head>
 <body>
-<div id="input" class="column">
+<div class="dock">
+<div id="inputColumn" class="column">
 <b>Original source</b>
-<br><textarea rows=12 id="originalString" class="source"></textarea>
-</div><div id="thermalContainer" class="column">
+<br><textarea id="originalString" class="source"></textarea>
+</div><div id="thermalColumn" class="column">
 <span class="thermal0">0+ </span><span class="thermal1">1+ </span><span class="thermal2">2+ </span><span class="thermal3">3+ </span><span class="thermal4">4+ </span><span class="thermal5">5+ </span><span class="thermal6">6+ </span><span class="thermal7">7+ </span><span class="thermal8">8+ </span><span class="thermal9">9+ </span><span class="thermal10">10+ </span><span class="thermal11">11+ </span>
 bits/original byte
 <div id="thermalView"></div>
 </div>
+</div>
+<div class="dockControl" id="inputDockControl">&#9660;</div><br>
 <fieldset>
 Attempt method hashing and renaming for
 <input type="checkbox" name="paramOHash2D" id="paramOHash2D" checked="checked"/>2D canvas context
@@ -331,7 +358,7 @@ function doRegPack() {
 	}
 	
 	// clear the thermal view, draw and show it
-	document.getElementById("thermalContainer").style.visibility="visible";
+	document.getElementById("thermalColumn").style.visibility="visible";
 	var thermalViewPanel = document.getElementById("thermalView");
 	while (thermalViewPanel.firstChild) {
 		thermalViewPanel.removeChild(thermalViewPanel.firstChild);
@@ -365,6 +392,26 @@ document.addEventListener("DOMContentLoaded", function(event) {
 		document.getElementById("originalString").value = StringHelper.getInstance().base64ToUnicode(urlArray[1]);
 	}
  
+	// Following #26, add a dock option for the first row containing input and thermal view 
+	document.getElementById("inputDockControl").docked=true;
+	document.getElementById("inputDockControl").onclick = function(event) {
+		this.docked = !this.docked;
+		
+		var originalStringView = document.getElementById("originalString");
+		var originalStringViewHeight="17em";
+		if (!this.docked) {
+			originalStringView.style.height = "auto";
+			originalStringViewHeight = (originalStringView.scrollHeight)+"px"
+		}
+		originalStringView.style.height = originalStringViewHeight;
+		originalStringView.style.overflowY = (this.docked ? "scroll" : "hidden");
+		
+		document.getElementById("thermalView").style.overflowY = this.docked ? "scroll" : "auto";
+		document.getElementById("thermalView").style.height = this.docked ? "14em" : "auto";
+		document.getElementById("thermalColumn").style.height = this.docked ? "15em" : "auto";
+		document.getElementById("inputColumn").style.height = this.docked ? "15em" : "auto";
+		this.firstChild.data = this.docked ? "\u25bc" : "\u25b2";
+	}
 
 });
 
