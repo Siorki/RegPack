@@ -15,6 +15,7 @@ var testIssue0047_EscapeInCharClass = require("./testIssue0047_EscapeInCharClass
 var testIssue0055_stringDelimiters = require("./testIssue0055_stringDelimiters");
 var testIssue0056_setIntervalDefaultParams = require("./testIssue0056_setIntervalDefaultParams");
 var testIssue0058_numberAsLoopVariable = require("./testIssue0058_numberAsLoopVariable");
+var testIssue0063_backtickFunctionParam = require("./testIssue0063_backtickFunctionParam");
 //var testIssue0050_unicodeSurrogate = require("./testIssue0050_unicodeSurrogate");
 
 // Execute all tests in sequence
@@ -37,4 +38,5 @@ testIssue0047_EscapeInCharClass();
 testIssue0055_stringDelimiters();
 testIssue0056_setIntervalDefaultParams();
 testIssue0058_numberAsLoopVariable();
+testIssue0063_backtickFunctionParam();
 //testIssue0050_unicodeSurrogate();

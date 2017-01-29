@@ -419,7 +419,7 @@ ShapeShifter.prototype = {
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
 		var input = inputData.contents;
-		var declarations = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(['"]2d['"]\)/gi);
+		var declarations = input.match (/([\w\d.]*)=[\w\d.]*\.getContext\(?[`'"]2d[`'"]\)?/gi);
 		if (declarations) {
 			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
 			{
@@ -484,7 +484,7 @@ ShapeShifter.prototype = {
 			objectDeclarationLengths.push(0);
 		}
 		// Then search for additional definitions inside the code. Keep name, declaration offset, and declaration length
-		var declarations = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,!]*)*\)(\s*\|\|\s*[\w\d.]*\.getContext\(['"](experimental-)*webgl['"](,[\w\d\s{}:.,!]*)*\))*/gi);
+		var declarations = input.match (/([\w\d.]*)\s*=\s*[\w\d.]*\.getContext\(?[`'"](experimental-)*webgl[`'"](,[\w\d\s{}:.,!]*)*\)?(\s*\|\|\s*[\w\d.]*\.getContext\(?[`'"](experimental-)*webgl[`'"](,[\w\d\s{}:.,!]*)*\)?)*/gi);
 		if (declarations) {
 			for (var declIndex=0; declIndex<declarations.length; ++declIndex)
 			{
@@ -508,7 +508,7 @@ ShapeShifter.prototype = {
 
 			// elaborate on the previous result : replace GL constants with values
 			var constantHashedData = PackerData.clone(methodHashedData, " WebGL(methods+constants)");
-			constantHashedData.log += "----------- Hashing methods + replacing constants for GL context -----------\n";
+			constantHashedData.log += "----------- Replacing constants for GL context -----------\n";
 			// output stored in constantHashedData
 			this.replaceWebGLconstants(constantHashedData, objectNames, this.contextDescriptor.canvasGLContextDescription.constants);
 
