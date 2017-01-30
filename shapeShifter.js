@@ -1569,8 +1569,41 @@ ShapeShifter.prototype = {
 		for (var i=0; i<formerVariableCharList.length; ++i)
 		{
 			var oldVarName = formerVariableCharList[i];
-			var exp = new RegExp("(^|[^\\w\\d$_])"+(oldVarName=="$"?"\\":"")+oldVarName,"g");						
-			output = output.replace(exp, "$1"+availableCharList[i]);
+			var exp = new RegExp("(^|[^\\w\\d$_])"+(oldVarName=="$"?"\\":"")+oldVarName,"g");
+			// #57 : replace if not in string, or if inside a substitution pattern in a `template literal`
+			
+			var stringIndex = 0;
+			var variableMatch = exp.exec(output);
+			while (variableMatch && variableMatch[0] != "") {
+				var offset = variableMatch.index+variableMatch[0].indexOf(oldVarName);
+				while (stringIndex < inputData.containedStrings.length && inputData.containedStrings[stringIndex].end < offset) {
+					++stringIndex;
+				}
+				var doReplace = true;
+				if (stringIndex < inputData.containedStrings.length 
+					&& inputData.containedStrings[stringIndex].begin < offset
+					&& offset < inputData.containedStrings[stringIndex].end) {
+					// the match is inside a string
+					doReplace = false;
+					// browse the string to find an ES6 substitution pattern : ${ ... }
+					for (var index=inputData.containedStrings[stringIndex].begin; index<offset; ++index) {
+						if (output.charCodeAt(index-1)!=92 && output.charCodeAt(index)==36 && output.charCodeAt(index+1)==123) {
+							// ${ not preceded by \ : beginning of a substitution pattern
+							doReplace = true;
+						}
+						if (output.charCodeAt(index-1)!=92 && output.charCodeAt(index)==125) {
+							// } not preceded by \ : end of a substitution pattern
+							doReplace = false;
+						}
+					}					
+				}
+				if (doReplace) {
+					output = output.substr(0, offset) + availableCharList[i] + output.substr(offset+1);
+				}
+				
+				variableMatch = exp.exec(output);
+			}
+
 			// Perform the replacement on the code appended by refactorToSetInterval()
 			inputData.interpreterCall = inputData.interpreterCall.replace(exp, "$1"+availableCharList[i]);
 			inputData.wrappedInit = inputData.wrappedInit.replace(exp, "$1"+availableCharList[i]);
