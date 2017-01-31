@@ -12,12 +12,13 @@ var testIssue0042_patternViewer = require("./testIssue0042_patternViewer");
 var testIssue0044_setIntervalArrowFunction = require("./testIssue0044_setIntervalArrowFunction");
 var testIssue0045_closingBracket = require("./testIssue0045_closingBracket");
 var testIssue0047_EscapeInCharClass = require("./testIssue0047_EscapeInCharClass");
+var testIssue0050_unicodeSurrogate = require("./testIssue0050_unicodeSurrogate");
 var testIssue0055_stringDelimiters = require("./testIssue0055_stringDelimiters");
 var testIssue0056_setIntervalDefaultParams = require("./testIssue0056_setIntervalDefaultParams");
 var testIssue0057_replacementInString = require("./testIssue0057_replacementInString");
 var testIssue0058_numberAsLoopVariable = require("./testIssue0058_numberAsLoopVariable");
 var testIssue0063_backtickFunctionParam = require("./testIssue0063_backtickFunctionParam");
-//var testIssue0050_unicodeSurrogate = require("./testIssue0050_unicodeSurrogate");
+var testIssue0064_utf8EncodeURI = require("./testIssue0064_utf8EncodeURI");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -36,9 +37,10 @@ testIssue0042_patternViewer();
 testIssue0044_setIntervalArrowFunction();
 testIssue0045_closingBracket();
 testIssue0047_EscapeInCharClass();
+testIssue0050_unicodeSurrogate();
 testIssue0055_stringDelimiters();
 testIssue0056_setIntervalDefaultParams();
 testIssue0057_replacementInString();
 testIssue0058_numberAsLoopVariable();
 testIssue0063_backtickFunctionParam();
-//testIssue0050_unicodeSurrogate();
+testIssue0064_utf8EncodeURI();

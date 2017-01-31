@@ -154,18 +154,28 @@ RegPack.prototype = {
 				var found=true;	// stop as soon as no substring of length t is found twice
 				for(var t=2;found;++t) {
 					found=false;
-					for(i=0;++i<s.length-t;)
-						if(!matches[x=s.substr(j=i,t)])
-						{
-							if(~(j=s.indexOf(x,j+t)))
+					for(i=0;++i<s.length-t;) {
+						var beginCode = s.charCodeAt(i);
+						var endCode = s.charCodeAt(i+t-1);
+						// #50 : if the first character is a low surrogate (second character of a surrogate pair
+						// representing an astral character), skip it - we cannot have it begin the string
+						// and thus break the pair
+						// Same issue if the last character is a high surrogate (first in surrogate pair).
+						if ((beginCode<0xDC00 || beginCode>0xDFFF)
+							&& (endCode<0xD800 || endCode>0xDBFF)) {
+							if(!matches[x=s.substr(j=i,t)])
 							{
-								found=true;
-								for(matches[x]=1;~j;matches[x]++)
+								if(~(j=s.indexOf(x,j+t)))
 								{
-									j=s.indexOf(x,j+t);
+									found=true;
+									for(matches[x]=1;~j;matches[x]++)
+									{
+										j=s.indexOf(x,j+t);
+									}
 								}
 							}
 						}
+					}
 				}
 			} else {	// only recompute the values of previously found matches
 				var newMatches={};
