@@ -62,7 +62,7 @@
 		this.canvas2DContextDescription.properties.push("mozImageSmoothingEnabled"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozTextStyle"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("webkitImageSmoothingEnabled"); // Webkit-prefixed
-		this.canvas2DContextDescription.properties.push("drawImageFromRect"); // deprecated, supported up to Chrome 40
+		//#32 : removed drawImageFromRect (deprecated, supported up to Chrome 40)
 
 	}
  }

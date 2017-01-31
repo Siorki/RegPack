@@ -86,8 +86,8 @@
 			"mozFillRule", // FF-prefixed
 			"mozImageSmoothingEnabled", // FF-prefixed
 			"mozTextStyle", // FF-prefixed
-			"webkitImageSmoothingEnabled", // Webkit-prefixed
-			"drawImageFromRect" // deprecated, supported up to Chrome 40
+			"webkitImageSmoothingEnabled" // Webkit-prefixed
+			//#32 : removed drawImageFromRect (deprecated, supported up to Chrome 40)
 		], 
 		constants : {}
 	};
