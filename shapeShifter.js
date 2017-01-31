@@ -1640,6 +1640,7 @@ ShapeShifter.prototype = {
 		var inString = false;
 		var currentString = false;
 		var input = inputData.contents;
+		var escaped = false;
 
 		for (var i=0; i<input.length; ++i) {
 			var currentChar = input.charCodeAt(i);
