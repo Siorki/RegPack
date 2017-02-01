@@ -1,4 +1,23 @@
-v4.0.1 - February 2015
+v5.0.0 - February 2017
+
+New features :
+- #26 : Add a heatmap vizualisation
+- #33 : [Online demo] Sync the input textarea with the URL's hash
+- #44 : Support for arrow function when refactoring setInterval
+- #47 : Support escaped characters in character class
+- #48 : Crusher phase - list patterns that are "almost" gains
+- #54 : Opt-out flag for ES6 features
+- #55 : Harmonize strings delimiters inside the code, to free " or ' as compression token
+- #56 : Support for default parameters when refactoring setInterval()
+- #63 : ES6 : Support syntax canvas.getContext`2d` in module "hash context"
+
+Fixed bugs
+- #52 : regPack.html - Base64 output fails for chars outside of the Latin1 range
+- #57 : $ in template literals
+- #58 : Hash context module uses digit as loop variable
+
+------------------------------
+v4.0.1 - February 2016
 
 Fixed bugs
  - #39 : Rename variable in unpacking loop and protect variable d and g by default 
@@ -7,7 +26,7 @@ Fixed bugs
  - #45 : Closing bracket ] not allowed in character class range definition
 
 ------------------------------
-v4.0.0 - December 2015
+v4.0 - December 2015
 
 New features :
  - #16 : Add an option for base64 encoded output

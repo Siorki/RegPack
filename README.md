@@ -1,18 +1,19 @@
-**RegPack** is a packer intended for use on minified Javascript code. Current revision is 4.0.1
+**RegPack** is a packer intended for use on minified Javascript code. Current revision is 5.0.0
 
 It is mostly suited to small size constraints (1kb, up to 4kb).
 
-The current version works in six stages :
+The current version works in seven stages :
 - *(if enabled)* 2D, WebGL and Audio contexts method shortcuts are defined and used instead of the long, original names.
 - *(if enabled)* variables are renamed in order to reduce character footprint and free tokens for compression.
 - *(if enabled)* Initialization code is pushed inside the main loop, with conditional execution on the time variable, so that the unpacker can execute everything through ``setInterval()``
+- string quotes are altered in order to minimize escaping inside the strings
 - redundancies are eliminated and replaced by tokens, as done by JS Crush (by Aivo Paas) and First Crush (by Tim Down).
 - the token list is turned into a regular expression consisting in a character class.
 - the tokens are rearranged to create a negated character class (starting with a hyphen ^ then listing nontoken characters)
 
 The text boxes show intermediate stage results. Best one gets a green highlight :
-- Preprocessed : after the first three stages. Hidden if no change was brought to the initial code.
-- Crushed : after the fourth stage
+- Preprocessed : after the first four stages. Hidden if no change was brought to the initial code.
+- Crushed : after the fifth stage
 - RegPack'ed : best between last two stages. Depends on how the characters present in the string are spread in the ASCII table.
 
 --
