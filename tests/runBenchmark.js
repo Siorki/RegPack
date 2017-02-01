@@ -26,7 +26,7 @@ var sources = [
 	{ fileName:"2016 - Romanesco 2.0.js", options:{ contextVariableName : 'g', contextType : 1} },
 	{ fileName:"2016 - Voxeling.js", options:{ wrapInSetInterval : true, timeVariableName : 'e', varsNotReassigned : 'abc'} },
 	{ fileName:"2016 - Firewatch.js", options:{ wrapInSetInterval : true, timeVariableName : 's'} },
-	{ fileName:"jscrush.js", options: {contextVariableName : 'a', varsNotReassigned : 'B' } }
+	{ fileName:"jscrush.js", options: {contextVariableName : 'a', varsNotReassigned : 'b_' } }
 	
 ];
 
