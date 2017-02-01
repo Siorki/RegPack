@@ -12,6 +12,7 @@ New features :
 - #63 : ES6 : Support syntax canvas.getContext`2d` in module "hash context"
 
 Fixed bugs
+- #50 : Crusher splits Unicode high/low surrogate pairs, producing incorrect strings 
 - #52 : regPack.html - Base64 output fails for chars outside of the Latin1 range
 - #57 : $ in template literals
 - #58 : Hash context module uses digit as loop variable
