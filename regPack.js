@@ -61,6 +61,7 @@ function RegPack() {
 	this.preprocessor = new ShapeShifter();
 }
 
+var details, x, e, N, M, bestValue, bestLength, Z1, j;
 
 RegPack.prototype = {
 
@@ -142,13 +143,12 @@ RegPack.prototype = {
 		packerData.matchesLookup = [];
 		var transform = [];
 		details='';
-		
 		// #55 : 34(") and 39(') now allowed, as long as they are not the chosen delimiter
 		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
-		Q=[];for(i=0;++i<127;i-10&&i-13&&i-delimiterCode&&i-92&&Q.push(String.fromCharCode(i)));
+		var Q=[];for(var i=0;++i<127;i-10&&i-13&&i-delimiterCode&&i-92&&Q.push(String.fromCharCode(i)));
 		var matches = {};
 		for(var tokens='';;tokens=c+tokens) {
-			for(c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
+			for(var c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
 			if(!c)break;
 			if (tokens.length==0) {	// search all string space for possible matches
 				var found=true;	// stop as soon as no substring of length t is found twice
@@ -887,7 +887,7 @@ RegPack.prototype = {
 
 };
 
-packer = new RegPack();
+var packer = new RegPack();
 
 
 // Node.js setup
