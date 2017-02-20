@@ -302,19 +302,24 @@ ShapeShifter.prototype = {
 				finalCode = finalCode.substr(delayMatch[0].length);
 				if (finalCode.length) {
 					details += "Last "+finalCode.length+" bytes also moved there.\n";
-					finalCode = ";"+finalCode;
+					finalCode = (initCode.length > 0 ? ";" : "")+finalCode;
 				}
 				details += "Interval of "+delayMatch[1]+ "ms pushed to unpacking routine.\n";
 				
 				// wrap the initialization code into a conditional sequence :
 				//   - if(!t){/*init code*/} if the variable is used (and set) afterwards
 				//   - if(!t++){/*init code*/} if it is created only for the test
-				var wrapperCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){";
+				//   -  #72 : nothing if there is no init code 
+				var wrapperCode = "", wrapperEnd = "";
+				if (initCode.length + finalCode.length > 0) {
+					wrapperCode = "if(!"+timeVariableName+(timeVariableProvided?"":"++")+"){";
+					wrapperEnd = "}";
+				}
 				var mainLoopCode = input.substr(loopMatch.index+loopMatch[0].length, index-loopMatch.index-loopMatch[0].length-1);
 				// Redefine the "offset zero" of our transformed code,
 				// used to hash methods/properties of contexts provided by shim
 				inputData.initialDeclarationOffset = wrapperCode.length;
-				output = wrapperCode + initCode + finalCode + "}" + paramsCode + mainLoopCode;
+				output = wrapperCode + initCode + finalCode + wrapperEnd + paramsCode + mainLoopCode;
 				
 				inputData.interpreterCall = 'setInterval(_,'+delayMatch[1]+')';
 				inputData.wrappedInit = timeVariableName+'=0';
@@ -337,10 +342,11 @@ ShapeShifter.prototype = {
 				// code before the main loop, before the time variable declaration, mapped to itself
 				transform.push ( { chapter : 0, rangeIn : [0, timeDefinitionBegin], rangeOut : [rangeOutBegin, timeDefinitionBegin] });
 				rangeOutBegin += timeDefinitionBegin;
+				var initSecondHalfLength = 0;
 				if (timeDefinitionMatch) {
 					// code before the main loop, after the time variable declaration, mapped to itself
 					// may omit the final "," or ";", if any, that is eliminated = mapped to nothing
-					var initSecondHalfLength = initCode.length-timeDefinitionBegin;
+					initSecondHalfLength = initCode.length-timeDefinitionBegin;
 					transform.push ( { chapter : 0, rangeIn : [timeDefinitionEnd, initSecondHalfLength], rangeOut : [rangeOutBegin, initSecondHalfLength] });
 					rangeOutBegin += initSecondHalfLength;
 				}
@@ -349,9 +355,9 @@ ShapeShifter.prototype = {
 					transform.push ( { chapter : 0, rangeIn : [index+delayMatch[0].length, finalCode.length], rangeOut : [rangeOutBegin, finalCode.length] });
 					rangeOutBegin += finalCode.length;
 				}
-				// "}" : mapped to final "}" of the main loop
-				transform.push ( { chapter : 0, rangeIn : [index-1, 1], rangeOut : [rangeOutBegin, 1] });
-				++rangeOutBegin;
+				// "}" : mapped to final "}" of the main loop, if any
+				transform.push ( { chapter : 0, rangeIn : [index-1, 1], rangeOut : [rangeOutBegin, wrapperEnd.length] });
+				rangeOutBegin += wrapperEnd.length;
 				// parameters of the loop function, mapped to themselves
 				var paramsOffset = loopMatch.index+loopMatch[0].indexOf(loopMatch[1]);
 				transform.push ( { chapter : 0, rangeIn : [paramsOffset, loopMatch[1].length], rangeOut : [rangeOutBegin, paramsCode.length] });

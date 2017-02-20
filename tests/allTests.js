@@ -19,6 +19,7 @@ var testIssue0057_replacementInString = require("./testIssue0057_replacementInSt
 var testIssue0058_numberAsLoopVariable = require("./testIssue0058_numberAsLoopVariable");
 var testIssue0063_backtickFunctionParam = require("./testIssue0063_backtickFunctionParam");
 var testIssue0064_utf8EncodeURI = require("./testIssue0064_utf8EncodeURI");
+var testIssue0072_setIntervalNoInitCode = require("./testIssue0072_setIntervalNoInitCode");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -44,3 +45,4 @@ testIssue0057_replacementInString();
 testIssue0058_numberAsLoopVariable();
 testIssue0063_backtickFunctionParam();
 testIssue0064_utf8EncodeURI();
+testIssue0072_setIntervalNoInitCode();
