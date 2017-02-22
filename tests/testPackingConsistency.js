@@ -38,7 +38,8 @@ function unpack(packedCode) {
 	var packedStringEnd = packedCode.lastIndexOf(packedStringDelimiter);
 	
 	var packedString = packedCode.substring(packedStringBegin+3, packedStringEnd);
-	var originalString = packedString.replace(new RegExp("\\"+packedStringDelimiter, "g"), packedStringDelimiter);
+	var originalString = packedString.replace(new RegExp("\\\\"+packedStringDelimiter, "g"), packedStringDelimiter)
+									 .replace(/\\\\/g,'\\');
 
 	
 	var beginRegPack = packedCode.indexOf("=/", packedStringEnd);
@@ -57,7 +58,8 @@ function unpack(packedCode) {
 		
 		if (packedStringEnd > 0) {	// JSCrush / FirstCrush marker identified
 			packedString = packedCode.substring(packedStringBegin+3, packedStringEnd);
-			originalString = packedString.replace(new RegExp("\\"+packedStringDelimiter, "g"), packedStringDelimiter);
+			originalString = packedString.replace(new RegExp("\\\\"+packedStringDelimiter, "g"), packedStringDelimiter)
+										 .replace(/\\\\/g,'\\');
 			
 			var tokenString= packedCode.substring(tokensBegin+1, tokensEnd);
 			for (var i in tokenString) {
@@ -66,7 +68,7 @@ function unpack(packedCode) {
 			}
 		} 
 	}
-	return originalString.replace(/\\\\/g,'\\');
+	return originalString;
 
 }
 

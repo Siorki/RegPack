@@ -130,7 +130,6 @@ RegPack.prototype = {
 	/**
 	 * First stage : apply the algorithm common to First Crush and JS Crush
 	 * Adds member variables to packerData :
-	 *  - escapedInput : input with doubled antislashes
 	 *  - matchesLookup : array containing matches and inner details
 	 *
 	 * @param packerData A PackerData structure holding the input string and setup
@@ -138,8 +137,7 @@ RegPack.prototype = {
 	 * @output array [length, packed string, log]
 	 */
 	findRedundancies : function(packerData, options) {
-		packerData.escapedInput = packerData.contents.replace(/\\/g,'\\\\');
-		var s = packerData.escapedInput;
+		var s = packerData.contents;
 		packerData.matchesLookup = [];
 		var transform = [];
 		details='';
@@ -264,8 +262,11 @@ RegPack.prototype = {
 			loopMemberCode = 'i';
 		}
 		
+		// escape the backslashes present in the code
+		var packedString = this.stringHelper.matchAndReplaceAll(s, false, '\\', '\\\\', '', '', 0, transform); 
+		
 		// escape the occurrences of the string delimiter present in the code
-		var packedString = this.stringHelper.matchAndReplaceAll(s, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
+		packedString = this.stringHelper.matchAndReplaceAll(packedString, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
 		//var packedString = s.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
 		
 		// and put everything together
@@ -354,7 +355,7 @@ RegPack.prototype = {
 			//  - quotes "(34), '(39), this will change with #55
 			// New since #47, \(92) and ](93) which need escaping in character class, are allowed as tokens.
 			// New since #55, "(34) and '(39), as long as they are not the delimiter for the string
-			if (i!=packerData.packedStringDelimiter.charCodeAt(0) && packerData.escapedInput.indexOf(token)==-1) {
+			if (i!=packerData.packedStringDelimiter.charCodeAt(0) && packerData.contents.indexOf(token)==-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -427,7 +428,7 @@ RegPack.prototype = {
 		var outOfTokens = false;
 		packerData.tokenCount = 0; // total number of tokens used. Will be less than packerData.matchesLookup.length at the end if any negatives are found
 		
-		var regPackOutput = packerData.escapedInput;
+		var regPackOutput = packerData.contents;
 		for (var i=0;i<packerData.matchesLookup.length;++i) {
 			var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
 			for (var j=0; j<packerData.matchesLookup.length;++j) {
@@ -581,10 +582,13 @@ RegPack.prototype = {
 			}			
 		}
 
+		// escape the backslashes in the compressed code (from original code or added as token)
+		// #65 : do it now and not earlier so it applies on token \ as well
+		var checkedString = this.stringHelper.matchAndReplaceAll(regPackOutput, false, '\\', '\\\\', '', '', 0, transform); 
+		
 		// escape the occurrences of the string delimiter present in the code
-		var checkedString = this.stringHelper.matchAndReplaceAll(regPackOutput, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
-		//var checkedString = regPackOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
-
+		checkedString = this.stringHelper.matchAndReplaceAll(checkedString, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
+		
 		// and add the unpacking code to the compressed string
 		var unpackBlock1 = 'for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
 		var unpackBlock2 = packerData.packedStringDelimiter+';G=/['+tokenString+']/.exec('+packerData.packedCodeVarName
@@ -605,13 +609,14 @@ RegPack.prototype = {
 
 		// check that unpacking the string yields the original code
 		details+="------------------------\nFinal check : ";
-		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,"g"), packerData.packedStringDelimiter);		
+		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,'g'), packerData.packedStringDelimiter);		
+		checkedString = checkedString.replace(/\\\\/g, '\\');		
 		var regToken = new RegExp("["+tokenString+"]","");
 		for(var token="" ; token = regToken.exec(checkedString) ; ) {
 			var k = checkedString.split(token);
 			checkedString = k.join(k.shift());
 		}
-		var success = (checkedString == packerData.escapedInput);
+		var success = (checkedString == packerData.contents);
 		details+=(success ? "passed" : "failed")+".\n";
 
 
@@ -683,7 +688,7 @@ RegPack.prototype = {
 		var availableCharactersCount = 0;
 		for(i=1;i<128;++i) {
 			var token = String.fromCharCode(i);
-			if (packerData.escapedInput.indexOf(token)>-1) {
+			if (packerData.contents.indexOf(token)>-1) {
 				if (firstInLine ==-1) {
 					firstInLine = i;
 				}
@@ -705,8 +710,8 @@ RegPack.prototype = {
 
 		// Issue #2 : unicode characters handling
 		var inputContainsUnicode = false;
-		for (i=0;i<packerData.escapedInput.length&&!inputContainsUnicode;++i) {
-			inputContainsUnicode = inputContainsUnicode || (packerData.escapedInput.charCodeAt(i)>127);
+		for (i=0;i<packerData.contents.length&&!inputContainsUnicode;++i) {
+			inputContainsUnicode = inputContainsUnicode || (packerData.contents.charCodeAt(i)>127);
 		}
 		if (inputContainsUnicode) {
 			// non-ASCII as a whole block. Those characters are not allowed as tokens,
@@ -838,7 +843,7 @@ RegPack.prototype = {
 
 		// use the same matches order as in the second stage
 		packerData.matchesLookup.sort(function(a,b) {return a.newOrder-b.newOrder; });
-		var thirdStageOutput = packerData.escapedInput;
+		var thirdStageOutput = packerData.contents;
 		// and perform the replacement using the token string as listed above
 		for (var i=0;i<packerData.tokenCount && i<tokenString.length;++i)
 		{
@@ -850,9 +855,12 @@ RegPack.prototype = {
 			//thirdStageOutput = matchedString+token+thirdStageOutput.split(matchedString).join(token);
 		}
 
+		// escape the backslashes in the compressed code (from original code or added as token)
+		// #65 : do it now and not earlier so it applies on token \ as well
+		var checkedString = this.stringHelper.matchAndReplaceAll(thirdStageOutput, false, '\\', '\\\\', '', '', 0, transform); 
+
 		// escape the occurrences of the string delimiter present in the code
-		var checkedString = this.stringHelper.matchAndReplaceAll(thirdStageOutput, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
-		//var checkedString = thirdStageOutput.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);		
+		checkedString = this.stringHelper.matchAndReplaceAll(checkedString, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
 
 		// add the unpacking code to the compressed string
 		var unpackBlock1 = 'for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
@@ -872,15 +880,15 @@ RegPack.prototype = {
 
 		// check that unpacking the string yields the original code
 		details+="------------------------\nFinal check : ";
-		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,"g"), packerData.packedStringDelimiter);		
+		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,'g'), packerData.packedStringDelimiter);		
+		checkedString = checkedString.replace(/\\\\/g, '\\');		
 		var regToken = new RegExp("["+regExpString+"]","");
 		for(var token="" ; token = regToken.exec(checkedString) ; ) {
 			var k = checkedString.split(token);
 			checkedString = k.join(k.shift());
 		}
-		var success = (checkedString == packerData.escapedInput);
+		var success = (checkedString == packerData.contents);
 		details+=(success ? "passed" : "failed")+".\n";
-
 
 		return [resultSize, thirdStageOutput, details, transform];
 	}
