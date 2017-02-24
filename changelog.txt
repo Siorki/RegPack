@@ -1,3 +1,13 @@
+v5.0.1 - February 2017
+
+Fixed bugs
+- #65 : RegPacked code contains invalid escape sequences
+- #70 : Line endings in bin/regpack
+- #72 : Optimization for refactor setInterval() when no initialization code
+- #73 : Unpacked source has "in" strings in wrong places
+- #75 : Variables leak into global space, should be declared local
+
+------------------------------
 v5.0.0 - February 2017
 
 New features :
