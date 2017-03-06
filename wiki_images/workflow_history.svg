@@ -27,9 +27,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.86831672"
-     inkscape:cx="442.97019"
-     inkscape:cy="389.12366"
+     inkscape:zoom="0.61399264"
+     inkscape:cx="592.80793"
+     inkscape:cy="414.14812"
      inkscape:current-layer="layer1"
      id="namedview6055"
      showgrid="false"
@@ -46,7 +46,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -58,7 +58,7 @@
        style="fill:#cccccc;fill-opacity:1;stroke:none"
        id="rect7130"
        width="33.397953"
-       height="294.96301"
+       height="368.66882"
        x="119.48405"
        y="84.197021" />
     <rect
@@ -67,23 +67,23 @@
        width="33.397953"
        height="211.22961"
        x="119.48405"
-       y="385.93024" />
+       y="459.93024" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#e80000;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#ffab09;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847"
        width="107.95544"
        height="62.09782"
        x="278.97098"
        y="315.14319" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#e80000;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#ffab09;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-4"
        width="107.95544"
        height="62.09782"
        x="395.89905"
        y="315.07452" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#e80000;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#ffab09;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-8"
        width="107.95544"
        height="62.09782"
@@ -141,153 +141,153 @@
        y="335.80899" />
     <text
        xml:space="preserve"
-       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#e80031;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
-       x="210.03923"
+       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffab09;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       x="236.03923"
        y="355.46219"
        id="text7217-2"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264"
-         x="210.03923"
-         y="355.46219">Rename variables</tspan></text>
+         x="236.03923"
+         y="355.46219">Quote strings</tspan></text>
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-7"
        width="107.95544"
        height="62.09782"
        x="278.60175"
-       y="388.31363" />
+       y="462.31363" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-4-6"
        width="107.95544"
        height="62.09782"
        x="395.52979"
-       y="388.24496" />
+       y="462.24496" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-8-1"
        width="107.95544"
        height="62.09782"
        x="162.17046"
-       y="388.245" />
+       y="462.245" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-4"
        width="47.719006"
        height="20.942503"
        x="362.89532"
-       y="408.97943" />
+       y="482.97943" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-8-2"
        width="47.719006"
        height="20.942503"
        x="254.9666"
-       y="408.97943" />
+       y="482.97943" />
     <text
        xml:space="preserve"
-       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
        x="295.35333"
-       y="428.63263"
+       y="502.63263"
        id="text7217-2-3"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264-2"
          x="295.35333"
-         y="428.63263">Crush</tspan></text>
+         y="502.63263">Crush</tspan></text>
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-7-2"
        width="107.95544"
        height="62.09782"
        x="279.75342"
-       y="462.01944" />
+       y="536.01941" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-4-6-1"
        width="107.95544"
        height="62.09782"
        x="396.68146"
-       y="461.95078" />
+       y="535.95081" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#3800a0;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#3800a0;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-8-1-6"
        width="107.95544"
        height="62.09782"
        x="163.32213"
-       y="461.95081" />
+       y="535.95081" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-4-8"
        width="47.719006"
        height="20.942503"
        x="364.047"
-       y="482.68524" />
+       y="556.68524" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-8-2-5"
        width="47.719006"
        height="20.942503"
        x="256.11829"
-       y="482.68524" />
+       y="556.68524" />
     <text
        xml:space="preserve"
-       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
        x="221.67827"
-       y="502.33844"
+       y="576.33844"
        id="text7217-2-3-7"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264-2-6"
          x="221.67827"
-         y="502.33844">Pack : regex [..]</tspan></text>
+         y="576.33844">Pack : regex [..]</tspan></text>
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#be009d;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#be009d;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-7-1"
        width="107.95544"
        height="62.09782"
        x="279.75342"
-       y="534.57361" />
+       y="608.57361" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#be009d;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#be009d;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-4-6-8"
        width="107.95544"
        height="62.09782"
        x="396.68146"
-       y="534.50494" />
+       y="608.50494" />
     <rect
-       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#be009d;stroke-width:3.75649570999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#be009d;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-8-1-9"
        width="107.95544"
        height="62.09782"
        x="163.32214"
-       y="534.50494" />
+       y="608.50494" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-4-2"
        width="47.719006"
        height="20.942503"
        x="364.047"
-       y="555.23938" />
+       y="629.23938" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:none"
        id="rect3002-8-2-7"
        width="47.719006"
        height="20.942503"
        x="256.11826"
-       y="555.23938" />
+       y="629.23938" />
     <text
        xml:space="preserve"
-       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#be009c;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#be009c;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
        x="210.78163"
-       y="574.89258"
+       y="648.89258"
        id="text7217-2-3-9"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264-2-5"
          x="210.78163"
-         y="574.89258">Pack : regex [^..]</tspan></text>
+         y="648.89258">Pack : regex [^..]</tspan></text>
     <text
        xml:space="preserve"
        style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
@@ -436,14 +436,60 @@
     <text
        xml:space="preserve"
        style="font-size:28px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold"
-       x="-550.60156"
+       x="-624.60156"
        y="147.32549"
        id="text7093-5"
        sodipodi:linespacing="125%"
        transform="matrix(0,-1,1,0,0,0)"><tspan
          sodipodi:role="line"
-         x="-550.60156"
+         x="-624.60156"
          y="147.32549"
          id="tspan7101-0">PACKER</tspan></text>
+    <rect
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="rect6847-1"
+       width="107.95544"
+       height="62.09782"
+       x="278.93231"
+       y="389.45203" />
+    <rect
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="rect6847-4-7"
+       width="107.95544"
+       height="62.09782"
+       x="395.86038"
+       y="389.38336" />
+    <rect
+       style="fill:#ffffff;fill-opacity:0.74603176;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="rect6847-8-4"
+       width="107.95544"
+       height="62.09782"
+       x="162.50107"
+       y="389.38339" />
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="rect3002-0"
+       width="47.719006"
+       height="20.942503"
+       x="363.22592"
+       y="410.11783" />
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none"
+       id="rect3002-8-9"
+       width="47.719006"
+       height="20.942503"
+       x="255.29721"
+       y="410.11783" />
+    <text
+       xml:space="preserve"
+       style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#e80031;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       x="210.00058"
+       y="429.77103"
+       id="text7217-2-4"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan7264-8"
+         x="210.00058"
+         y="429.77103">Rename variables</tspan></text>
   </g>
 </svg>

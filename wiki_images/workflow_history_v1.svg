@@ -27,9 +27,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.86831672"
-     inkscape:cx="639.42104"
-     inkscape:cy="372.04724"
+     inkscape:zoom="0.5"
+     inkscape:cx="314.12154"
+     inkscape:cy="212.50837"
      inkscape:current-layer="layer1"
      id="namedview6055"
      showgrid="false"
@@ -55,10 +55,24 @@
      inkscape:groupmode="layer"
      id="layer1">
     <rect
+       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26948714,11.26948714;stroke-dashoffset:0"
+       id="rect6847-45-5-1"
+       width="341.47726"
+       height="62.09782"
+       x="163.95435"
+       y="85.123657" />
+    <rect
+       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26948714,11.26948714;stroke-dashoffset:0"
+       id="rect6847-45-5-1-4"
+       width="341.47726"
+       height="62.09782"
+       x="163.95435"
+       y="239.99112" />
+    <rect
        style="fill:#cccccc;fill-opacity:1;stroke:none"
        id="rect7130"
        width="33.397953"
-       height="294.96301"
+       height="368.66882"
        x="119.48405"
        y="84.197021" />
     <rect
@@ -67,64 +81,57 @@
        width="33.397953"
        height="211.22961"
        x="119.48405"
-       y="385.93024" />
+       y="459.93024" />
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#ff6d01;stroke-width:3.75590551;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26771654,11.26771654;stroke-dashoffset:0"
+       style="fill:#ff6d01;fill-opacity:0;stroke:#ff6d01;stroke-width:3.75590563;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26771688,11.26771688;stroke-dashoffset:0"
        id="rect6847-45-5"
        width="341.47726"
        height="62.09782"
-       x="163.20641"
+       x="163.95435"
        y="163.20001" />
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26948714,11.26948714;stroke-dashoffset:0"
-       id="rect6847-45-5-1"
-       width="341.47726"
+       style="fill:#3800a0;fill-opacity:0.33333334;stroke:#3800a0;stroke-width:3.75590550999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="rect6847-8-1"
+       width="338.46393"
        height="62.09782"
        x="163.95435"
-       y="85.123657" />
-    <rect
-       style="fill:#3800a0;fill-opacity:0.33333334;stroke:#3800a0;stroke-width:3.75590563000000000;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
-       id="rect6847-8-1"
-       width="343.90305"
-       height="62.09782"
-       x="160.54991"
-       y="390.245" />
+       y="462.245" />
     <text
        xml:space="preserve"
-       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
        x="295.35333"
-       y="428.63263"
+       y="502.63263"
        id="text7217-2-3"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264-2"
          x="295.35333"
-         y="428.63263">Crush</tspan></text>
+         y="502.63263">Crush</tspan></text>
     <rect
-       style="fill:#3800a0;fill-opacity:0.33333334;stroke:#3800a0;stroke-width:3.75590563000000000;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:#3800a0;fill-opacity:0.33333334;stroke:#3800a0;stroke-width:3.75590550999999980;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect6847-8-1-6"
-       width="343.90305"
+       width="338.46393"
        height="62.09782"
-       x="160.54991"
-       y="463.37497" />
+       x="163.95435"
+       y="535.95081" />
     <text
        xml:space="preserve"
        style="font-size:25.13100433px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#2600a0;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
        x="221.67827"
-       y="502.33844"
+       y="576.33844"
        id="text7217-2-3-7"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan7264-2-6"
          x="221.67827"
-         y="502.33844">Pack : regex [..]</tspan></text>
+         y="576.33844">Pack : regex [..]</tspan></text>
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#be009d;stroke-width:3.75590563;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26771688,11.26771688;stroke-dashoffset:0"
+       style="fill:none;fill-opacity:0.33333332999999998;stroke:#be009d;stroke-width:3.75590563000000000;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26771688000000000, 11.26771688000000000;stroke-dashoffset:0"
        id="rect6847-8-1-9"
-       width="343.90305"
+       width="340.3996"
        height="62.09782"
-       x="160.54991"
-       y="536.50494" />
+       x="163.95435"
+       y="608.50494" />
     <text
        xml:space="preserve"
        style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
@@ -155,7 +162,7 @@
          x="741.74646"
          y="175.50269">RegPack v1</tspan></text>
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#be009c;stroke-width:2.578058;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73417401,7.73417401;stroke-dashoffset:0"
+       style="fill:none;fill-opacity:0.33333333999999998;stroke:#be009c;stroke-width:2.57952756;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73858268,7.73858268;stroke-dashoffset:0"
        id="rect6847-45-5-1-1-4"
        width="206.76057"
        height="48.304764"
@@ -173,7 +180,7 @@
          x="741.74646"
          y="232.07764">RegPack v2</tspan></text>
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:2.578058;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73417401,7.73417401;stroke-dashoffset:0"
+       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:2.57952762;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73858285,7.73858285;stroke-dashoffset:0"
        id="rect6847-45-5-1-1-7"
        width="206.76057"
        height="48.304764"
@@ -191,7 +198,7 @@
          x="741.74646"
          y="288.65265">RegPack v3</tspan></text>
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#ff6d01;stroke-width:2.57952761999999990;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73858285000000020, 7.73858285000000020;stroke-dashoffset:0"
+       style="fill:none;fill-opacity:0.33333333999999998;stroke:#ff6d01;stroke-width:2.57952762;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73858285,7.73858285;stroke-dashoffset:0"
        id="rect6847-45-5-1-1-1"
        width="206.76057"
        height="48.304764"
@@ -209,12 +216,23 @@
          x="742.89813"
          y="345.22763">RegPack v4</tspan></text>
     <rect
-       style="fill:none;fill-opacity:0.33333333999999998;stroke:#e80000;stroke-width:3.75917077;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.27751231,11.27751231;stroke-dashoffset:0"
-       id="rect6847-45"
-       width="341.64691"
-       height="62.09782"
-       x="162.53972"
-       y="240.20682" />
+       style="fill:none;fill-opacity:0.33333332999999998;stroke:#ffab08;stroke-width:2.57952756;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:7.73858268,7.73858268;stroke-dashoffset:0"
+       id="rect6847-45-5-1-1-1-0"
+       width="206.76057"
+       height="48.304764"
+       x="722.64319"
+       y="367.53613" />
+    <text
+       xml:space="preserve"
+       style="font-size:25.13100433000000000px;font-style:oblique;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffab09;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold Oblique"
+       x="742.32227"
+       y="401.80261"
+       id="text7217-23-98-2"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan7219-3-6-8"
+         x="742.32227"
+         y="401.80261">RegPack v5</tspan></text>
     <text
        xml:space="preserve"
        style="font-size:28px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold"
@@ -230,21 +248,28 @@
     <text
        xml:space="preserve"
        style="font-size:28px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Verdana;-inkscape-font-specification:Verdana Bold"
-       x="-550.60156"
+       x="-624.60156"
        y="147.32549"
        id="text7093-5"
        sodipodi:linespacing="125%"
        transform="matrix(0,-1,1,0,0,0)"><tspan
          sodipodi:role="line"
-         x="-550.60156"
+         x="-624.60156"
          y="147.32549"
          id="tspan7101-0">PACKER</tspan></text>
     <rect
-       style="fill:none;stroke:#e80000;stroke-width:3.75917077;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.27751231, 11.27751231;stroke-dashoffset:0"
-       id="rect6847-45-7"
-       width="341.64691"
+       style="fill:#ffffff;fill-opacity:0.74603176000000004;stroke:#ffab09;stroke-width:3.75590551;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26771654,11.26771654;stroke-dashoffset:0"
+       id="rect6847-45-5-1-8"
+       width="341.47726"
        height="62.09782"
-       x="162.00441"
-       y="315.7251" />
+       x="163.95435"
+       y="315.04556" />
+    <rect
+       style="fill:none;stroke:#e80000;stroke-width:3.75649571;stroke-linecap:butt;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:11.26948714, 11.26948714;stroke-dashoffset:0"
+       id="rect6847-45-5-1-4-5"
+       width="341.47726"
+       height="62.09782"
+       x="163.95435"
+       y="388.36224" />
   </g>
 </svg>
