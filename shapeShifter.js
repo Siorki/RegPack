@@ -1647,13 +1647,16 @@ ShapeShifter.prototype = {
 		var currentString = false;
 		var input = inputData.contents;
 		var escaped = false;
+		var insideTemplateLiteral = 0;
+		var currentChar = 0;
 
 		for (var i=0; i<input.length; ++i) {
-			var currentChar = input.charCodeAt(i);
+			var formerChar = currentChar;
+			currentChar = input.charCodeAt(i);
 			// delimiters : 34 " , 39 ' , 96 `
 			if (currentChar==34 || currentChar==39 || currentChar==96) {
 				if (currentString) {
-					if (currentChar == currentString.delimiter && !escaped) {
+					if (currentChar == currentString.delimiter && !escaped && !insideTemplateLiteral) {
 						// found the match to the string begin
 						currentString.end = i;
 						inputData.containedStrings.push(currentString);
@@ -1669,6 +1672,18 @@ ShapeShifter.prototype = {
 					// start a new string
 					inString = true;
 					currentString = { begin:i, end:-1, delimiter:currentChar, characterCount:Array(128).fill(0) };
+				}
+			} 
+			if (formerChar==36 && currentChar==123 && currentString) { // 36 $, 123 {
+				if (currentString.delimiter==96) { // 96 `
+					// #82 : inside a template literal, backticks do not terminate the string
+					++insideTemplateLiteral;
+				}
+			}
+			if (currentChar==125 && currentString && insideTemplateLiteral>0) { // 125 }
+				if (currentString.delimiter==96) { // 96 `
+					// #82 : inside a template literal, backticks do not terminate the string
+					--insideTemplateLiteral;
 				}
 			}
 			escaped = (currentChar==92 && !escaped);

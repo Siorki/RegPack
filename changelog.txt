@@ -1,3 +1,8 @@
+v5.x
+
+Fixed bugs
+- #82 : Nested backticks in template literal causes string renaming module to miss occurrences
+
 v5.0.1 - February 2017
 
 Fixed bugs
