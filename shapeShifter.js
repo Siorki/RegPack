@@ -1786,7 +1786,7 @@ ShapeShifter.prototype = {
 				rangeIn : [currentString.begin, currentString.end-currentString.begin+1],
 				rangeOut: [newInput.length, currentString.end-currentString.begin+1]
 			};
-			if (currentString.delimiter == newDelimiter) {
+			if (currentDelimiter == newDelimiter) {
 				// keep the delimiter for the current string 
 				// copy as is and keep the iso mapping
 				newInput += inputData.contents.substr(currentString.begin, currentString.end-currentString.begin+1);
