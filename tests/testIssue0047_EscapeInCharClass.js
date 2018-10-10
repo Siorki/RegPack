@@ -200,14 +200,14 @@ function testEscapedCharacterReplacementFails() {
 	// Expected result : the regular expression decodes correctly
 	assert.notEqual(result[0].result[1][2].indexOf("Final check : passed"), -1);
 	// Ranges Y-\\ 0-2, 2 unused, \\ gets replaced with 2
-	assert.notEqual(result[0].result[1][1].indexOf("=/[X-\\]0]/"), -1);
+	assert.notEqual(result[0].result[1][1].indexOf("=/[X-\\]01]/"), -1);
 
 	input = fs.readFileSync("../TestCases/gitHub#47-packer_from92ReplaceFails.js", { encoding:"utf8"});
 	result = RegPack.packer.runPacker(input, options);
 	// Expected result : the regular expression decodes correctly
 	assert.notEqual(result[0].result[1][2].indexOf("Final check : passed"), -1);
 	// And the only block ends in ], no tokens are available for replacement
-	assert.notEqual(result[0].result[1][1].indexOf("=/[\\\\-`01]/"), -1);
+	assert.notEqual(result[0].result[1][1].indexOf("=/[\\]-`0-2]/"), -1);
 }
 
 module.exports = runTests

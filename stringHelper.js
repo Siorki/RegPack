@@ -37,6 +37,25 @@ var StringHelper = (function() {
 		}
 		
 		/**
+		 * Count bytes in a character's UTF-8 representation inside a string
+		 * Code similar to getByteLength() except for character \ thar must be escaped and thus costs 2
+		 * @see getByteLength
+		 * @param unicode : character's Unicode valude
+		 * @return (int) character byte length
+		 */
+		this.getCharacterLength = function (unicode) {
+			var byteLen = unicode < (1 <<  7) ? 1 :
+						  unicode < (1 << 11) ? 2 :
+						  unicode < (1 << 16) ? 3 :
+						  unicode < (1 << 21) ? 4 :
+						  unicode < (1 << 26) ? 5 :
+						  unicode < (1 << 31) ? 6 : Number.NaN;
+			byteLen += (unicode==92 ? 1 : 0);
+			return byteLen;
+		}
+		 
+		
+		/**
 		 * Encode a string to base64
 		 * Replacement for btoa() which does not handle correctly characters beyond 0xff
 		 *
@@ -202,15 +221,16 @@ var StringHelper = (function() {
 	
 		/**
 		 * Express a block as a range for a character class in a RegExp
-		 * @param character code for the first character in range
-		 * @param length character count (last is thus first + length - 1)
+		 * @param first character code for the first character in range
+		 * @param last character code for the last character in range
 		 * @return a string representing the range inside a character class
 		 */
-		this.writeRangeToRegexpCharClass = function(first, length) {
+		this.writeRangeToRegexpCharClass = function(first, last) {
+			var length = last-first+1;
 			var output = length > 0 ? this.writeCharToRegexpCharClass(first) : "";
 			output += (length>2 ? "-" : "");
 			if (length>1) {
-				output += this.writeCharToRegexpCharClass(first + length - 1);
+				output += this.writeCharToRegexpCharClass(last);
 			}
 			
 			return output;

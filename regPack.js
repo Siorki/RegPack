@@ -352,7 +352,6 @@ RegPack.prototype = {
 			//  - 0 and 127 (excluded from loop)
 			//  - any character present in the code
 			//  - LF(10) and CR(13), not allowed in code nor as tokens, skipped in ranges
-			//  - quotes "(34), '(39), this will change with #55
 			// New since #47, \(92) and ](93) which need escaping in character class, are allowed as tokens.
 			// New since #55, "(34) and '(39), as long as they are not the delimiter for the string
 			if (i!=packerData.packedStringDelimiter.charCodeAt(0) && packerData.contents.indexOf(token)==-1) {
@@ -366,30 +365,48 @@ RegPack.prototype = {
 					if (firstInLine == 10 || firstInLine == 13) {
 						++firstInLine;
 					}
-					var tokenCount = i-firstInLine;
+					var lastInLine = i-1;
 					// for the same reason, do not end a block with CR nor LF (watch out, the end of the block is the index before i)
 					if (i==11 || i==14) {
-						--tokenCount;
+						--lastInLine;
 					}
-					if (tokenCount>0) {	// may be 0 if there is only CR or LF in the range
-						var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, tokenCount);
-						tokenList.push({first:firstInLine, count:tokenCount, cost:range.length});
+					if (lastInLine>=firstInLine) {	// skip if there is only CR or LF in the range
+						var tokenCount = lastInLine-firstInLine+1;
+						var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, lastInLine);
+						var containsBackslash = (firstInLine<=92 && i>92);
+						tokenList.push({first:firstInLine, last:lastInLine, count:tokenCount, cost:range.length, oneByteTokenCount:tokenCount-(containsBackslash?1:0)});
 					}
 					firstInLine = -1;
 				}
 			}
 		}
 		if (firstInLine >-1) {
-			var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, i-firstInLine);
-			tokenList.push({first:firstInLine, count:i-firstInLine, cost:range.length});
+			var range = this.stringHelper.writeRangeToRegexpCharClass(firstInLine, i-1);
+			tokenList.push({first:firstInLine, last:i-1, count:i-firstInLine, cost:range.length, oneByteTokenCount:i-firstInLine-(firstInLine<=92?1:0)});
 		}
 		// Reorder the block list. #47 introduces escaped characters, making the order a bit more complex :
 		//  - longest blocks (as in largest token count) first 
 		//  - when tied for length, non escaped characters first (shortest representation in char class)
 		//  - when tied again, readable characters (32-127) first
 		tokenList.sort(function(a,b) {
-			return 10*b.count-b.cost+b.first/1000- (10*a.count-a.cost+a.first/1000); 
+			return 10*b.oneByteTokenCount-b.cost+b.first/1000- (10*a.oneByteTokenCount-a.cost+a.first/1000); 
 		});
+
+		
+		var costOneTokens = [], costTwoTokens = [];
+		for (var tokenLine=0; tokenLine<tokenList.length; ++tokenLine) {
+			for (var i=tokenList[tokenLine].first; i<=tokenList[tokenLine].last; ++i) {
+				if (i!=10 && i!=13) {
+					if (i==92) {
+						costTwoTokens.push(i);
+					} else {
+						costOneTokens.push(i);
+					}
+				}
+			}
+		}
+			
+
 		
 		// The first range must not start with ^, otherwise it will be interpreted as negated char class
 		// Two solutions :
@@ -401,7 +418,9 @@ RegPack.prototype = {
 			if (packerData.matchesLookup.length < tokenList[0].count || tokenList.length==1) {
 				// If we have enough tokens in the first range without the ^, remove it
 				// Do the same if we only have one range
-				tokenList[0].cost = this.stringHelper.writeRangeToRegexpCharClass(++tokenList[0].first, --tokenList[0].count).length;
+				tokenList[0].cost = this.stringHelper.writeRangeToRegexpCharClass(++tokenList[0].first, ++tokenList[0].last).length;
+				--tokenList[0].count;
+				--tokenList[0].oneByteTokenCount;
 			} 
 		}
 		
@@ -409,8 +428,8 @@ RegPack.prototype = {
 		details +="Token ranges\n"
 		details +="------------\n";
 		for (var i=0; i<tokenList.length;++i) {
-			details += this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].count);
-			details += " score = " + ( 10*tokenList[i].count-tokenList[i].cost+tokenList[i].first/1000) + "\n";
+			details += this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].last);
+			details += " score = " + ( 10*tokenList[i].oneByteTokenCount-tokenList[i].cost+tokenList[i].first/1000) + "\n";
 		}
 		details +="\n";
 		// Then, flatten the dependency graph into a line. The new compression order starts
@@ -423,13 +442,17 @@ RegPack.prototype = {
 		// Pack again by replacing the strings by the tokens, in the new compression order
 		// In case there are two or more candidates (not used by other strings), the same
 		// compression scoring is used as in the first stage.
-		var tokenLine = 0;	// 0-based index of current token line (block)
-		var tokenIndex = 0;	// 1-based index of current token in current line (incremented immediately in the loop)
-		var outOfTokens = false;
+		var availableTokens = costOneTokens.concat(costTwoTokens);
+		var tokensRemaining = true;	// true while there are tokens remaining
+		var gainsRemaining = true;		// true while there is at least one match with a positive gain (that will shorten the output if packed)
 		packerData.tokenCount = 0; // total number of tokens used. Will be less than packerData.matchesLookup.length at the end if any negatives are found
 		
 		var regPackOutput = packerData.contents;
-		for (var i=0;i<packerData.matchesLookup.length;++i) {
+		for (var i=0 ; i<packerData.matchesLookup.length && tokensRemaining && gainsRemaining ; ++i) {		
+		
+			var tokenCode = availableTokens[packerData.tokenCount];
+			var tokenCost = this.stringHelper.getCharacterLength(tokenCode); // 2 for \ , 1 for anything else
+		
 			var matchIndex=-1, bestScore=-999, bestGain=-1, bestCount=0, negativeCleared = false;
 			for (var j=0; j<packerData.matchesLookup.length;++j) {
 				if (packerData.matchesLookup[j].usedBy=="" && !packerData.matchesLookup[j].cleared) {
@@ -437,16 +460,16 @@ RegPack.prototype = {
 					for (var index=regPackOutput.indexOf(packerData.matchesLookup[j].originalString, 0); index>-1; ++count) {
 						index=regPackOutput.indexOf(packerData.matchesLookup[j].originalString, index+1);
 					}
-					var gain = count*packerData.matchesLookup[j].len-count-packerData.matchesLookup[j].len-2;
+					var gain = count*(packerData.matchesLookup[j].len-tokenCost)-packerData.matchesLookup[j].len-2*tokenCost;
 					var score = options.crushGainFactor*gain+options.crushLengthFactor*packerData.matchesLookup[j].len+options.crushCopiesFactor*count;
 					if (gain>=0) {
 						if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*count>options.crushTiebreakerFactor*bestCount))) // R>N JsCrush, R<N First Crush
-							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score,bestLength=packerData.matchesLookup[j].len;
+							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score;
 					} else {
 						// found a negative. The matching string may no longer be packed (if anything, match count will decrease, not increase)
 						// so we clear it (ie remove it from the dependency chain). This in turns allows strings it uses to be packed,
-						// otherwise their "usedBy" field would contain the negative and they could never be packed
-						// clearing a negative introduces a bias, since some strings that were in order before it could have been
+						// otherwise their "usedBy" field would contain the negative and they could never be packed.
+						// Clearing a negative introduces a bias, since some strings that were in order before it could have been
 						// considered for compression, but they were not because they were "usedBy" the negative.
 						// The comparison is useless : do not compress for this iteration of i
 						this.clear(packerData, j);
@@ -455,45 +478,26 @@ RegPack.prototype = {
 				}
 			}
 			if (!negativeCleared) {	// skip the compression step if we had a negative
-				if (matchIndex>-1) {	// a string was chosen, replace it with the next token
+				if (matchIndex>-1) {	
+					// a string was chosen, replace it with the current token
 					var matchedString = packerData.matchesLookup[matchIndex].originalString;
 					packerData.matchesLookup[matchIndex].newOrder = packerData.tokenCount;
 
+					var token = String.fromCharCode(tokenCode);
+					details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
+					
+					regPackOutput = this.stringHelper.matchAndReplaceAll(regPackOutput, false, matchedString, token, matchedString+token, "", 0, transform);
+					
+					// remove dependencies on chosen string/token
+					this.clear(packerData, matchIndex);
+
 					// define the replacement token
 					++packerData.tokenCount;
-					if (++tokenIndex > tokenList[tokenLine].count) {
-						if (tokenLine+1 < tokenList.length) {
-							++tokenLine;
-							tokenIndex=1;
-						} else {
-							--packerData.tokenCount;
-							--tokenIndex;
-							outOfTokens = true;
-						}
-					}
-					if (!outOfTokens) {
-						var tokenCode = tokenList[tokenLine].first + tokenIndex - 1;
-						// skip CR and LF characters
-						// earlier checks ensured that they never end a block
-						// so we can safely skip to the next one
-						if (tokenCode==10 || tokenCode==13) {
-							++tokenCode;
-							++tokenIndex;
-						}
-
-						var token = String.fromCharCode(tokenCode);
-						details+=token.charCodeAt(0)+"("+token+"), gain="+bestGain+", N="+bestCount+", str = "+matchedString+"\n";
-						
-						regPackOutput = this.stringHelper.matchAndReplaceAll(regPackOutput, false, matchedString, token, matchedString+token, "", 0, transform);
-						//regPackOutput = matchedString+token+regPackOutput.split(matchedString).join(token);
-
-						// remove dependencies on chosen string/token
-						this.clear(packerData, matchIndex);
-					} else {
-						// out of tokens : bail out early
+					if (packerData.tokenCount >= availableTokens.length) {
+						tokensRemaining = false; // bail out early
 						details+="Out of tokens\n";
-						i=packerData.matchesLookup.length;
-					}
+					} 
+					
 
 				} else {	// remaining strings, but no gain : skip them and end the loop
 					for (var j=0; j<packerData.matchesLookup.length;++j) {
@@ -501,39 +505,80 @@ RegPack.prototype = {
 							details += "skipped str = "+packerData.matchesLookup[j].originalString+"\n";
 						}
 					}
-					i=packerData.matchesLookup.length;
+					gainsRemaining = false;
 				}
 			}
 		}
 
+		// Map tokens used to actual ranges (lines)
+		
+		var tokenLine = 0;	// 0-based index of current token line (block)
+		var tokenIndex = 0;	// 1-based index of current token in current line
+		var unusedBackslash = availableTokens[availableTokens.length-1]==92 && packerData.tokenCount<availableTokens.length;
+	
+		if (packerData.tokenCount >= availableTokens.length) { // all available tokens in use (no replacement performed)
+			tokenLine = tokenList.length -1 ;
+			tokenIndex = tokenList[tokenList.length-1].count;
+		} else {
+			var lastTokenUsed = availableTokens[packerData.tokenCount-1];
+			var lineFound = false;
+			
+			while (!lineFound && tokenLine < tokenList.length) {
+				// #83 : if a range starts or end in \, and it is not actually used, replace it with the previous or next character
+				if (unusedBackslash && tokenList[tokenLine].first == 92) { // remove unused \ at the beginning of a range
+					++tokenList[tokenLine].first;
+					--tokenList[tokenLine].count;
+				}
+				if (unusedBackslash && tokenList[tokenLine].last == 92) { // remove unused \ at the end of a range
+					--tokenList[tokenLine].last;
+					--tokenList[tokenLine].count;
+				}	
+				if (lastTokenUsed >= tokenList[tokenLine].first	&& lastTokenUsed <= tokenList[tokenLine].last)  {
+					// no need to consider that 2-byte token \ can be in the middle of a range
+					// since it is used last, and we would be in the case where packerData.tokenCount exceeds costOneTokens.length
+					lineFound = true;
+					tokenIndex = lastTokenUsed - tokenList[tokenLine].first + 1;
+				} else {
+					++tokenLine;
+				}
+			}
+		}
+		
+		// Safeguard, should never happen (i.e. last token use is not found in ranges)
+		if (tokenLine >= tokenList.length) {
+			details += "Exception : token out of range\nFinal check : failed";
+			return [-1, "", details, transform];
+		}
+		
+		
+		
 		// #47 introduces escaped characters (2 bytes instead of 1) as tokens
 		// Ranges with such a character at the beginning or end thus cost one extra byte to define
 		// If the last range used has leftover tokens (more tokens available than needed),
 		// we use those tokens at no cost to replace the escaped ones.
 		// for instance, last range is A-E but only used up to C, and we have range W-\\ before
 		// by substituting D for \\, we end up with [W-[A-D] which is one byte shorter than [W-\\A-C]
+		
+		// #83 amends that by forcing \ to be always the last token to be considered
+		// Since it is the last one, there are no leftovers to replace it
+		// The only possible replaced token is thus ]
 
 		// First identify if we have leftover tokens in the last range
 		var remainingTokens = tokenList[tokenLine].count - tokenIndex;
 		// Force the last range to its actual length - in case it ends with a \ or ] but not all tokens are used
+		tokenList[tokenLine].last -= remainingTokens; 
 		tokenList[tokenLine].count = tokenIndex; 
 		if (remainingTokens > 0) {
 			var tokensToReplace = [];
-			// then look for escaped characters at the beginning or end of a range
+			// then look for escaped character ] (93) at the beginning or end of a range
 			for (var i=0; i<=tokenLine; ++i) {
-				if (this.stringHelper.needsEscapingInCharClass(tokenList[i].first)) {
-					var needTwoTokens = tokenList[i].count>1 && this.stringHelper.needsEscapingInCharClass(1+tokenList[i].first);
-					// true if the first two in range need escaping. We need to replace two tokens to gain anything.
-					tokensToReplace.push({rangeIndex : i , atBeginning : true, count : needTwoTokens?2:1});
-				} else if (this.stringHelper.needsEscapingInCharClass(tokenList[i].first+tokenList[i].count-1)) {
-					var needTwoTokens = tokenList[i].count>1 && this.stringHelper.needsEscapingInCharClass(tokenList[i].first+tokenList[i].count-2);
-					// true if the last two in range need escaping. We need to replace two tokens to gain anything.
-					tokensToReplace.push({rangeIndex : i , atBeginning : false, count : needTwoTokens?2:1});
+				if (tokenList[i].first == 93) {
+					tokensToReplace.push({rangeIndex : i , atBeginning : true, count : 1});
+				} else if (tokenList[i].last == 93) {
+					tokensToReplace.push({rangeIndex : i , atBeginning : false, count : 1});
 				}
 			}
-			// Theoretically we should sort the array by increasing value of tokens needed
-			// However since the only possibilities here are [1, 1] or [2] we skip that step
-			// (only two characters need escaping)
+			// The only token to replace is ] (93), but we kept the code that handles multiple tokens
 			for (var i=0; i<tokensToReplace.length; ++i) {
 				if (remainingTokens >= tokensToReplace[i].count) {
 					// substitute as many tokens as required (1 or 2)
@@ -542,23 +587,37 @@ RegPack.prototype = {
 						++tokenIndex;
 						--remainingTokens;
 						var currentRange = tokenList[tokensToReplace[i].rangeIndex];
-						var oldToken = String.fromCharCode(tokensToReplace[i].atBeginning ? currentRange.first : currentRange.first + currentRange.count - 1);
-						var newToken = String.fromCharCode(tokenList[tokenLine].first + tokenIndex - 1);
+						var oldToken = String.fromCharCode(tokensToReplace[i].atBeginning ? currentRange.first : currentRange.last);
+						var newToken = String.fromCharCode(++tokenList[tokenLine].last);
 						regPackOutput = regPackOutput.split(oldToken).join(newToken);
 						details += oldToken.charCodeAt(0)+"("+oldToken+") replaced by "+newToken.charCodeAt(0)+"("+newToken+")\n";
 						
 						// shift beginning or end of the former range
-						--currentRange.count;
+						--currentRange.count;	
+						++tokenList[tokenLine].count;
 						if (tokensToReplace[i].atBeginning) {
 							++currentRange.first;
+							// if the shift exposes an unused \ at the beginning of the range, shift again
+							if (unusedBackslash && currentRange.first==92) {
+								++currentRange.first;
+								--currentRange.count;
+							}
+						} else {
+							--currentRange.last;
+							// if the shift exposes an unused \ at the end of the range, shift again
+							if (unusedBackslash && currentRange.last==92) {
+								--currentRange.last;
+								--currentRange.count;
+							}
+						}
+						// if we are adding from the end of the same range we are removing tokens from, shift beginning while keeping length constant
+						if (tokensToReplace[i].rangeIndex == tokenLine) {
+							--tokenIndex;
 						}
 					}
 				}
 			}	
 		}
-
-		// limit the last range to the tokens actually used
-		tokenList[tokenLine].count = tokenIndex; 
 
 		
 		// The former step may have removed ] and \ at the beginning of a range, exposing ^ as first character
@@ -572,7 +631,7 @@ RegPack.prototype = {
 		// build the character class
 		var tokenString = "";		
 		for (var i=0; i<=tokenLine; ++i) {
-			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].count);
+			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].last);
 			// Fix for issue #31 : if a token line consists in a single "-",
 			// add it at the beginning of the character class instead of appending it
 			if (rangeString.charCodeAt(0)==45) { // 45 is '-'
@@ -723,7 +782,7 @@ RegPack.prototype = {
 		var regExpString = "";
 		for (i in usedCharacters) {
 			j=usedCharacters[i];
-			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last-j.first+1);
+			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last);
 			// Fix for issue #31 : if a token line consists in a single "-",
 			// add it at the beginning of the character class instead of appending it
 			if (j.size==1 && j.first==45) { // 45 is '-'
@@ -809,7 +868,7 @@ RegPack.prototype = {
 			for (i in usedCharacters)
 			{
 				j=usedCharacters[i];
-				var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last-j.first+1);
+				var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last);
 				// Fix for issue #31 : if a token line consists in a single "-",
 				// add it at the beginning of the character class instead of appending it
 				if (j.size==1 && j.first==45) { // 45 is '-'

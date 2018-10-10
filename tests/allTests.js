@@ -22,10 +22,12 @@ var testIssue0064_utf8EncodeURI = require("./testIssue0064_utf8EncodeURI");
 var testIssue0065_invalidEscapeSequence = require("./testIssue0065_invalidEscapeSequence");
 var testIssue0072_setIntervalNoInitCode = require("./testIssue0072_setIntervalNoInitCode");
 var testIssue0082_backticksInTemplateLiterals = require("./testIssue0082_backticksInTemplateLiterals");
+var testIssue0083_backslashToken = require("./testIssue0083_backslashToken");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
 // then push them down the list afterwards
+testIssue0083_backslashToken();
 testStringHelper();
 testPackingConsistency();
 testAudioContextCreate();
