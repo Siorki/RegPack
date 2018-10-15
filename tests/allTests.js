@@ -23,11 +23,11 @@ var testIssue0065_invalidEscapeSequence = require("./testIssue0065_invalidEscape
 var testIssue0072_setIntervalNoInitCode = require("./testIssue0072_setIntervalNoInitCode");
 var testIssue0082_backticksInTemplateLiterals = require("./testIssue0082_backticksInTemplateLiterals");
 var testIssue0083_backslashToken = require("./testIssue0083_backslashToken");
+var testIssue0085_backslashSequenceLength = require("./testIssue0085_backslashSequenceLength");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
 // then push them down the list afterwards
-testIssue0083_backslashToken();
 testStringHelper();
 testPackingConsistency();
 testAudioContextCreate();
@@ -52,3 +52,5 @@ testIssue0064_utf8EncodeURI();
 testIssue0065_invalidEscapeSequence();
 testIssue0072_setIntervalNoInitCode();
 testIssue0082_backticksInTemplateLiterals();
+testIssue0083_backslashToken();
+testIssue0085_backslashSequenceLength();

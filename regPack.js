@@ -117,7 +117,7 @@ RegPack.prototype = {
 	},
 
 	/**
-	 * Returns the total byte length of a string
+	 * Returns the total byte length of a string "as is" (with no further escaping)
 	 *  1 for ASCII char
 	 *  3 for Unicode (UTF-8)
 	 * Issue #5 : final size when featuing unicode characters
@@ -127,6 +127,18 @@ RegPack.prototype = {
 		return encodeURI(inString).replace(/%../g,'i').length;
 	},
 
+	/**
+	 * Returns the byte length of a string after escaping 
+	 *  \ costs 2 bytes
+	 *  All other characters unchanged
+	 * Issue #85 : suboptimal compression of \ sequences
+	 */
+	getEscapedByteLength : function (inString)
+	{
+		return this.getByteLength(inString.replace(/\\/g,'\\\\'));
+	},
+
+	
 	/**
 	 * First stage : apply the algorithm common to First Crush and JS Crush
 	 * Adds member variables to packerData :
@@ -184,7 +196,7 @@ RegPack.prototype = {
 
 			bestLength=bestValue=M=N=e=Z=0;
 			for(i in matches){
-				j=this.getByteLength(i);
+				j=this.getEscapedByteLength(i);
 				R=matches[i];
 				Z=R*j-R-j-2;	// -1 used in JS Crush performs replacement with zero gain
 				value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
@@ -223,7 +235,7 @@ RegPack.prototype = {
 
 		var firstLine = true;
 		for(i in matches){
-			var j=this.getByteLength(i);
+			var j=this.getEscapedByteLength(i);
 			var R=matches[i];
 			var Z=R*j-R-j-2;	
 			if (Z>0) {
@@ -240,7 +252,7 @@ RegPack.prototype = {
 		// Implementation for #48 : show the patterns that are "almost" gains 
 		firstLine = true;
 		for(i in matches){
-			j=this.getByteLength(i);
+			j=this.getEscapedByteLength(i);
 			R=matches[i];
 			Z=R*j-R-j-2;	
 			Z1=(R+1)*j-(R+1)-j-2;

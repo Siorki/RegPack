@@ -1,8 +1,9 @@
-v5.x
+v5.0.2
 
 Fixed bugs
 - #82 : Nested backticks in template literal causes string renaming module to miss occurrences
 - #83 : Don't use "\" as a token if avoiding it makes the output smaller
+- #85 : Suboptimal packing due to incorrect assumed length of escape sequence
 
 v5.0.1 - February 2017
 
