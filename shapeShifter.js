@@ -1394,13 +1394,14 @@ ShapeShifter.prototype = {
 	 * @param input the input code to preprocess / pack
 	 * @return array [ keywords, variables ], each is a boolean [128]
 	 */
-	discriminateKeywordsAndVariables : function(input)
+	discriminateKeywordsAndVariables : function(inputData)
 	{
 		var variableChars = [];
 		var keywordChars = [];
 		var previousChar = 0;
 		var letterCount = 0;
 		var isKeyword = false;
+		var input = inputData.contents;
 		for (var i=0; i<128; ++i) {
 			variableChars[i] = keywordChars[i] = false;
 		}
@@ -1408,20 +1409,41 @@ ShapeShifter.prototype = {
 		//  - those used only in keywords, method names.
 		//  - those used as one-letter variable or function names only (and candidates to renaming)
 		//  - those used for both variable names and within keywords
-				
-		for (var i=0; i<input.length; ++i) {
-			var currentChar = input.charCodeAt(i);
+
+		var stringIndex = 0, templateLiteralIndex = 0;
+		for (var offset=0; offset<input.length; ++offset) {
+			
+			var currentChar = input.charCodeAt(offset);
 			if (currentChar<128) {
 				if (this.isCharAllowedInVariable(currentChar)) {
-					++letterCount;
-					if (letterCount>1) {
-						isKeyword=true;
-						keywordChars[previousChar]=true;
+				
+					while (stringIndex < inputData.containedStrings.length && inputData.containedStrings[stringIndex].end < offset) {
+						++stringIndex;
+					}
+					while (templateLiteralIndex < inputData.containedTemplateLiterals.length && inputData.containedTemplateLiterals[templateLiteralIndex].end < offset) {
+						++templateLiteralIndex;
+					}
+					var insideString = (stringIndex < inputData.containedStrings.length 
+						&& inputData.containedStrings[stringIndex].begin < offset
+						&& offset < inputData.containedStrings[stringIndex].end);
+					var insideTemplateLiteral = (templateLiteralIndex < inputData.containedTemplateLiterals.length 
+						&& inputData.containedTemplateLiterals[templateLiteralIndex].begin < offset
+						&& offset < inputData.containedTemplateLiterals[templateLiteralIndex].end);
+					
+					if (insideString && !insideTemplateLiteral) {
+						// #76 : characters inside a string, out of a template literal ${...}, are not variables
 						keywordChars[currentChar]=true;
-					} else {
-						if (previousChar == 46) { // character .
+					} else { // in a template literal, or not in a string (variables allowed)
+						++letterCount;
+						if (letterCount>1) {
 							isKeyword=true;
+							keywordChars[previousChar]=true;
 							keywordChars[currentChar]=true;
+						} else {
+							if (previousChar == 46) { // character .
+								isKeyword=true;
+								keywordChars[currentChar]=true;
+							}
 						}
 					}
 				} else {
@@ -1464,12 +1486,12 @@ ShapeShifter.prototype = {
 	 */
 	reassignVariableNames : function (inputData, options)
 	{
-		var input = inputData.contents;
 		var varsNotReassigned = options.varsNotReassigned;
-		var keywordsAndVariables = this.discriminateKeywordsAndVariables(input);
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData);
 		var keywordChars = keywordsAndVariables[0];
 		var variableChars = keywordsAndVariables[1];
-
+		var input = inputData.contents;
+		
 		var details = "----------- Renaming variables to optimize RegExp blocks --------\n";
 		details += "All variables : ";
 		for (var i=32; i<128; ++i) {
@@ -1578,35 +1600,26 @@ ShapeShifter.prototype = {
 			var exp = new RegExp("(^|[^\\w\\d$_])"+(oldVarName=="$"?"\\":"")+oldVarName,"g");
 			// #57 : replace if not in string, or if inside a substitution pattern in a `template literal`
 			
-			var stringIndex = 0;
+			var stringIndex = 0, templateLiteralIndex = 0;
 			var variableMatch = exp.exec(output);
 			while (variableMatch && variableMatch[0] != "") {
 				var offset = variableMatch.index+variableMatch[0].indexOf(oldVarName);
 				while (stringIndex < inputData.containedStrings.length && inputData.containedStrings[stringIndex].end < offset) {
 					++stringIndex;
 				}
-				var doReplace = true;
-				if (stringIndex < inputData.containedStrings.length 
-					&& inputData.containedStrings[stringIndex].begin < offset
-					&& offset < inputData.containedStrings[stringIndex].end) {
-					// the match is inside a string
-					doReplace = false;
-					// browse the string to find an ES6 substitution pattern : ${ ... }
-					for (var index=inputData.containedStrings[stringIndex].begin; index<offset; ++index) {
-						if (output.charCodeAt(index-1)!=92 && output.charCodeAt(index)==36 && output.charCodeAt(index+1)==123) {
-							// ${ not preceded by \ : beginning of a substitution pattern
-							doReplace = true;
-						}
-						if (output.charCodeAt(index-1)!=92 && output.charCodeAt(index)==125) {
-							// } not preceded by \ : end of a substitution pattern
-							doReplace = false;
-						}
-					}					
+				while (templateLiteralIndex < inputData.containedTemplateLiterals.length && inputData.containedTemplateLiterals[templateLiteralIndex].end < offset) {
+					++templateLiteralIndex;
 				}
-				if (doReplace) {
+				var insideString = (stringIndex < inputData.containedStrings.length 
+					&& inputData.containedStrings[stringIndex].begin < offset
+					&& offset < inputData.containedStrings[stringIndex].end);
+				var insideTemplateLiteral = (templateLiteralIndex < inputData.containedTemplateLiterals.length 
+					&& inputData.containedTemplateLiterals[templateLiteralIndex].begin < offset
+					&& offset < inputData.containedTemplateLiterals[templateLiteralIndex].end);
+					
+				if (insideTemplateLiteral || !insideString) {	// perform replacement
 					output = output.substr(0, offset) + availableCharList[i] + output.substr(offset+1);
 				}
-				
 				variableMatch = exp.exec(output);
 			}
 
@@ -1645,6 +1658,7 @@ ShapeShifter.prototype = {
 		var details = "\nStrings present in the code :\n";
 		var inString = false;
 		var currentString = false;
+		var currentTemplateLiteral = false;
 		var input = inputData.contents;
 		var escaped = false;
 		var insideTemplateLiteral = 0;
@@ -1678,17 +1692,35 @@ ShapeShifter.prototype = {
 				if (currentString.delimiter==96) { // 96 `
 					// #82 : inside a template literal, backticks do not terminate the string
 					++insideTemplateLiteral;
+					if (insideTemplateLiteral == 1) {
+						currentTemplateLiteral = { begin: i, end: -1 };
+					}
 				}
 			}
 			if (currentChar==125 && currentString && insideTemplateLiteral>0) { // 125 }
 				if (currentString.delimiter==96) { // 96 `
 					// #82 : inside a template literal, backticks do not terminate the string
 					--insideTemplateLiteral;
+					if (!insideTemplateLiteral) {
+						currentTemplateLiteral.end=i;
+						inputData.containedTemplateLiterals.push(currentTemplateLiteral);
+					}
 				}
 			}
 			escaped = (currentChar==92 && !escaped);
 		}
+		
+		if (inputData.containedTemplateLiterals.length) {
+			details += "\nTemplate literals present in the code :\n";
+		}
+		for (var i=0; i<inputData.containedTemplateLiterals.length; ++i) {
+			var currentTemplateLiteral = inputData.containedTemplateLiterals[i];
+			details += "("+currentTemplateLiteral.begin+"-"+currentTemplateLiteral.end+") ";
+			details += input.substr(currentString.begin-1, currentString.end-currentString.begin+2)+"\n";
+		}
+		
 		inputData.log+=details+"\n";
+		
 	},
 	
 	/**
