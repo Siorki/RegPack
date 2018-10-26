@@ -42,16 +42,16 @@ ShapeShifter.prototype = {
 	/**
 	 * Preparation stage : attempt to rehash the methods from canvas context
 	 * Produces a pair of hashed/not hashed strings for each option
-	 * so each selected flag doubles the number of tests.
+	 * so each selected "splitter" flag doubles the number of tests. 
 	 * Creates a list with all the combinations to feed to the packer, one at a time.
 	 * "with Math()" option is applied on all entries if selected (does not create a pair)
 	 *
 	 * @param input : the string to pack
 	 * @param options : preprocessing options, as follows
 	 *       -  withMath : true if the option "Pack with(Math)" was selected, false otherwise
-	 *       -  hash2DContext : true if the option "Hash and rename 2D canvas context" was selected, false otherwise
-	 *       -  hashWebGLContext : true if the option "Hash and rename WebGL canvas context" was selected, false otherwise
-	 *       -  hashAudioContext : true if the option "Hash and rename AudioContext" was selected, false otherwise
+	 *       -  hash2DContext : (splitter) true if the option "Hash and rename 2D canvas context" was selected, false otherwise
+	 *       -  hashWebGLContext : (splitter) true if the option "Hash and rename WebGL canvas context" was selected, false otherwise
+	 *       -  hashAudioContext : (splitter) true if the option "Hash and rename AudioContext" was selected, false otherwise
 	 *       -  contextVariableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
 	 *       -  contextType : the context type (0=2D, 1=WebGL) if the "assume context" option was selected, irrelevant otherwise
 	 *       -  reassignVars : true to globally reassign variable names 
@@ -59,6 +59,7 @@ ShapeShifter.prototype = {
 	 *       -  wrapInSetInterval : true to wrap the unpacked code in a setInterval() call instead of eval()
 	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
 	 *       -  useES6 : true to add ES6 constructs to the code, false otherwise
+	 * @return an array of PackerData, representing all combinations for splitter flags  
 	 */
 	preprocess : function(input, options) {
 	
@@ -133,7 +134,7 @@ ShapeShifter.prototype = {
 		inputList[0].name="unhashed";
 
 		for (var i=0; i<inputList.length; ++i) {
-			this.identifyStrings(inputList[i], options);
+			this.identifyStrings(inputList[i]);
 			// call module : quote strings
 			this.quoteStrings(inputList[i], options);
 			if (options.reassignVars) {
@@ -145,10 +146,10 @@ ShapeShifter.prototype = {
 	},
 
 	/**
-	 * Modifies the environment execution of the unpacked code,
-	 * wrapping it into with(Math).
+	 * Modifies the environment execution of the unpacked code, wrapping it into with(Math).
 	 * Removes all references to Math. in the input code
 	 * @param inputData (in/out) PackerData structure containing the code to refactor and setup 
+	 * @return nothing. Result of refactoring is stored in parameter inputData.
 	 */
 	defineEnvironment : function(inputData) {
 		inputData.environment = 'with(Math)';
@@ -1257,6 +1258,9 @@ ShapeShifter.prototype = {
 	 *  1 for ASCII char
 	 *  3 for Unicode (UTF-8)
 	 * Issue #5 : final size when featuing unicode characters
+	 *
+	 * @param inString the string to measure
+	 * @return the UTF-8 length of the string, in bytes 
 	 */
 	getByteLength : function (inString)
 	{
@@ -1266,6 +1270,9 @@ ShapeShifter.prototype = {
 	/**
 	 * Returns true if the character code is allowed in the name of a variable.
 	 * Allowed codes are 36($), 48-57(0-9), 65-90(A-Z), 95(_), 97-122(a-z)
+	 *
+	 * @param charCode ASCII code of the character (variables with Unicode > 127 are not accepted)
+	 * @return true if the character is allowed in the name of a variable, false otherwie
 	 */
 	isCharAllowedInVariable : function (charCode)
 	{
@@ -1276,6 +1283,8 @@ ShapeShifter.prototype = {
 
 	/**
 	 * Returns true if the character code is a digit
+	 * @param charCode ASCII or Unicode value of the character
+	 * @return true for digits (0 to 9 = ASCII 48 to 57), false otherwise
 	 */
 	isDigit : function (charCode)
 	{
@@ -1342,11 +1351,11 @@ ShapeShifter.prototype = {
 	 * Defines and returns a packer-friendly name for a new variable.
 	 * 
 	 * It first lists characters used in keywords but not in existing variables.
-	 * If none is found, it takes the first character not assigned
-	 * to a variable.
+	 * If none is found, it takes the first character not assigned to a variable.
 	 * If none is available, it returns a two-letter variable.
 	 * 
 	 * @param input the input code to preprocess / pack
+	 * @return the name of the new variable, as a string
 	 * @see discriminateKeywordsAndVariables
 	 */
 	allocateNewVariable : function(input)
@@ -1391,7 +1400,7 @@ ShapeShifter.prototype = {
 	 * @see reassignVariableNames
 	 * @see allocateNewVariable
 	 * 
-	 * @param input the input code to preprocess / pack
+	 * @param inputData PackerData structure containing the setup and the code to process
 	 * @return array [ keywords, variables ], each is a boolean [128]
 	 */
 	discriminateKeywordsAndVariables : function(inputData)
@@ -1641,19 +1650,16 @@ ShapeShifter.prototype = {
 	},
 	
 	/**
-	 * Recognize all strings inside the input code
+	 * Recognize all strings and template literals inside the input code
 	 *
 	 * Offset to beginning and end are stored into a table, along with
 	 *  - delimiters used : ", ' or `(since ES6)
 	 *  - other delimiters present inside the string
      *  - if the string definition and allocation is standalone, and could thus be extracted	 
 	 * @param inputData (in/out) PackerData structure containing the setup and the code to process
-	 * @param options options set, see below for use details
-	 * @return nothing. Result is stored inside parameter inputData.
-	 * Options used are :
-	 *  none so far
+	 * @return nothing. Result is stored inside parameter inputData (containedStrings and containedTemplateLiterals)
 	 */
-	identifyStrings : function (inputData, options)
+	identifyStrings : function (inputData)
 	{
 		var details = "\nStrings present in the code :\n";
 		var inString = false;

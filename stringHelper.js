@@ -202,7 +202,7 @@ var StringHelper = (function() {
 		 *  - characters between 128 and 255 are \x..
 		 *  - others (even below 32) are raw
 		 * @input charCode unicode value of the character to encode
-		 * @output formatted representation of the character for a RegExp char class
+		 * @return formatted representation of the character for a RegExp char class
 		 */
 		this.writeCharToRegexpCharClass = function(charCode)
 		{

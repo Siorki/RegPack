@@ -68,6 +68,9 @@ RegPack.prototype = {
 
 	/**
 	 * Main entry point for RegPack
+	 * @param input A string containing the program to pack
+	 * @param options An object detailing the different options for the preprocessor and packer
+	 * @return An array of PackerData, each containing the code packed with different settings from the preprocessor
 	 */
 	runPacker : function(input, options) {
 		// clear leading/trailing blanks and one-liner comments
@@ -120,7 +123,10 @@ RegPack.prototype = {
 	 * Returns the total byte length of a string "as is" (with no further escaping)
 	 *  1 for ASCII char
 	 *  3 for Unicode (UTF-8)
-	 * Issue #5 : final size when featuing unicode characters
+	 * Issue #5 : final size when featuring unicode characters
+	 *
+	 * @param inString the string to measure
+	 * @return the UTF-8 length of the string, in bytes 
 	 */
 	getByteLength : function (inString)
 	{
@@ -132,6 +138,9 @@ RegPack.prototype = {
 	 *  \ costs 2 bytes
 	 *  All other characters unchanged
 	 * Issue #85 : suboptimal compression of \ sequences
+	 *
+	 * @param inString the string to measure
+	 * @return the UTF-8 length of the string, including added escape characters, in bytes 
 	 */
 	getEscapedByteLength : function (inString)
 	{
@@ -146,7 +155,7 @@ RegPack.prototype = {
 	 *
 	 * @param packerData A PackerData structure holding the input string and setup
 	 * @param options Preprocessing and packing options (tiebreaker, score factors)
-	 * @output array [length, packed string, log]
+	 * @return array [length, packed string, log]
 	 */
 	findRedundancies : function(packerData, options) {
 		var s = packerData.contents;
@@ -302,7 +311,7 @@ RegPack.prototype = {
 	},
 
 	/**
-	 * Clears a match from matchesLookup for dependencies
+	 * Clears a match from matchesLookup for dependencies in the PackerData
 	 *  - removes the corresponding token from the use list of other matches
 	 *  - sets the "cleared" flag to true
 	 *
@@ -324,7 +333,7 @@ RegPack.prototype = {
 	 *
 	 * @param packerData A PackerData structure holding the input string and setup
 	 * @param options Preprocessing and packing options (tiebreaker, score factors)
-	 * @output array [length, packed string, log]
+	 * @return array [length, packed string, log]
 	 */
 	packToRegexpCharClass : function(packerData, options)
 	{
@@ -695,9 +704,12 @@ RegPack.prototype = {
 	},
 
 	/**
-	 * Returns true if the character is not allowed in a RegExp char class or as a token (ie needs escaping)
-	 * Characters : LF, CR, 127
+	 * Returns true if the character is not allowed in a RegExp char class or as a token (cannot be inserted per se, requires a sequence instead)
+	 * Forbidden characters are LF, CR, 127
 	 * ' and " are allowed since #55, unless they are the delimiter for the packed string
+	 *
+	 * @param ascii The ASCII or Unicode value of the character
+	 * @return true if the matching character is forbidden as token, false if it is allowed
 	 */
 	isForbiddenCharacter : function(ascii)
 	{
@@ -708,9 +720,12 @@ RegPack.prototype = {
 	 * Returns the number of forbidden characters in the interval [first-last]
 	 * Characters : same as in isForbiddenCharacter(), and the packed string delimiter
 	 * However, the packed string delimiter is forbidden as a token too
+	 *
+	 * @see isForbiddenCharacter
 	 * @param first : ASCII code of the first character in the interval, inclusive
 	 * @param last : ASCII code of the last character in the interval, inclusive
 	 * @param delimiterCode : ASCII code of the packed string delimiter (counts as forbidden)
+	 * @return the number of forbidden characters in the interval
 	 */
 	countForbiddenCharacters : function (first, last, delimiterCode)
 	{
@@ -723,25 +738,10 @@ RegPack.prototype = {
 
 
 	/**
-	 * Returns a printable string representing the character
-	 * including the needed escapes.
-	 * Characters from 1 to 31 are also escaped
-	 **/
-	getPrintableString : function (ascii)
-	{
-		if (ascii<32) {
-			return "\\"+ascii;
-		} else {
-			return (this.stringHelper.needsEscapingInCharClass(ascii)?"\\":"")+String.fromCharCode(ascii);
-		}
-	},
-
-
-	/**
 	 * Third stage : build the shortest negated character class regular expression
 	 * (a char class beginning with a ^, such as [^A-D] which comprises everything but characters A, B, C and D)
 	 * @param packerData A PackerData structure holding the input string and setup
-	 * @output array [length, packed string, log]
+	 * @return array [length, packed string, log]
 	 */
 	packToNegatedRegexpCharClass : function(packerData)
 	{
