@@ -1,6 +1,6 @@
 {
     "name": "regpack",
-    "version": "5.0.1",
+    "version": "5.0.2",
     "description": "A packer intended for use on minified Javascript code",
     "main": "regPack.js",
     "bin": {

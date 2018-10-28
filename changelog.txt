@@ -1,4 +1,4 @@
-v5.0.2
+v5.0.2 - October 2017
 
 Fixed bugs
 - #76 : Reassign variable names : still considering (but not replacing) text in strings
@@ -6,6 +6,7 @@ Fixed bugs
 - #83 : Don't use "\" as a token if avoiding it makes the output smaller
 - #85 : Suboptimal packing due to incorrect assumed length of escape sequence
 
+------------------------------
 v5.0.1 - February 2017
 
 Fixed bugs
