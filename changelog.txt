@@ -1,4 +1,4 @@
-v5.0.2 - October 2017
+v5.0.2 - October 2018
 
 Fixed bugs
 - #76 : Reassign variable names : still considering (but not replacing) text in strings
