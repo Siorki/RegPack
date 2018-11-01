@@ -25,6 +25,7 @@ var testIssue0076_listVariablesInString = require("./testIssue0076_listVariables
 var testIssue0082_backticksInTemplateLiterals = require("./testIssue0082_backticksInTemplateLiterals");
 var testIssue0083_backslashToken = require("./testIssue0083_backslashToken");
 var testIssue0085_backslashSequenceLength = require("./testIssue0085_backslashSequenceLength");
+var testIssue0087_firstCharacterInPattern = require("./testIssue0087_firstCharacterInPattern");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -56,3 +57,4 @@ testIssue0076_listVariablesInString();
 testIssue0082_backticksInTemplateLiterals();
 testIssue0083_backslashToken();
 testIssue0085_backslashSequenceLength();
+testIssue0087_firstCharacterInPattern();

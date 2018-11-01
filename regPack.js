@@ -173,7 +173,7 @@ RegPack.prototype = {
 				var found=true;	// stop as soon as no substring of length t is found twice
 				for(var t=2;found;++t) {
 					found=false;
-					for(i=0;++i<s.length-t;) {
+					for(i=0;i<s.length-t;++i) {
 						var beginCode = s.charCodeAt(i);
 						var endCode = s.charCodeAt(i+t-1);
 						// #50 : if the first character is a low surrogate (second character of a surrogate pair
