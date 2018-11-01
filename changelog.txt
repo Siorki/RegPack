@@ -1,3 +1,8 @@
+Fixed bugs
+- #87 : Crusher always ignores first character when searching for patterns
+- #88 : Unable to allocate a variable name for setInterval()
+
+------------------------------
 v5.0.2 - October 2018
 
 Fixed bugs

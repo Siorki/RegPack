@@ -231,7 +231,7 @@ ShapeShifter.prototype = {
 			
 			if (timeVariableName=="") {
 				timeVariableProvided = false;
-				timeVariableName = this.allocateNewVariable(input);
+				timeVariableName = this.allocateNewVariable(inputData);
 				details += "Using variable "+timeVariableName+" for time.\n";
 			}
 			
@@ -1354,13 +1354,13 @@ ShapeShifter.prototype = {
 	 * If none is found, it takes the first character not assigned to a variable.
 	 * If none is available, it returns a two-letter variable.
 	 * 
-	 * @param input the input code to preprocess / pack
+	 * @param inputData (constant) PackerData structure containing the input code
 	 * @return the name of the new variable, as a string
 	 * @see discriminateKeywordsAndVariables
 	 */
-	allocateNewVariable : function(input)
+	allocateNewVariable : function(inputData)
 	{
-		var keywordsAndVariables = this.discriminateKeywordsAndVariables(input);
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData);
 		var keywordChars = keywordsAndVariables[0];
 		var variableChars = keywordsAndVariables[1];
 		
@@ -1379,6 +1379,7 @@ ShapeShifter.prototype = {
 		}
 		
 		// if still not, try two-letter names
+		var input = inputData.contents;
 		for (var i=97; i<122; ++i) {
 			for (var j=97; j<122; ++j) {
 				name = String.fromCharCode(i,j);
