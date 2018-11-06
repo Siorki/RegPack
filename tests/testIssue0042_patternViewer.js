@@ -1,5 +1,6 @@
 var PatternViewer = require("../patternViewer")
 var fs = require("fs");
+var DocumentMock = require("./documentMock");
 var assert = require("assert");
 
 function runTests() {
@@ -7,38 +8,6 @@ function runTests() {
 	testLastBlockBeforeEnd();
 	testLastBlockAtEnd();
 	console.log("Issue #0042 - Pattern Viewer : done");
-}
-
-/**
- * Test mock for document (not present in node.js)
- * This instance simply stores the result in a string
- */
-function DocumentMock() {
-	this.message = "";
-}
-
-DocumentMock.prototype =  {
-	createElement : function(type) {
-		return new DivMock();
-	},
-	
-	createTextNode : function(contents) {
-		this.message += "[" + contents + "]";
-		return contents;
-	}
-
-}
-
-
-function DivMock() {
-}
-
-DivMock.prototype = {
-	setAttribute : function (a,b) {
-	},
-	
-	appendChild : function(element) {
-	}
 }
 
 

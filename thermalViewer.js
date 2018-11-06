@@ -27,10 +27,16 @@ ThermalViewer.prototype = {
 		var output = document.createElement("pre");
 		output.setAttribute("class","topLevel");
 		
+		// #89 : if the mapping is empty, assume identity
+		// (no compression / replacement, every character stored as is)
+		var finalSize = unpackedCode.length;
+		if (thermalMap.length > 0) {
+			finalSize = thermalMap[thermalMap.length-1][0].outLength;
+		}
+
 		// transform the successive mappings to a heatmap
-		var lastMapping = thermalMap[thermalMap.length-1];
 		// start from the final size : 8 bits for each character of the output
-		var currentHeatMap = new Array(lastMapping[0].outLength).fill(8);
+		var currentHeatMap = new Array(finalSize).fill(8);
 		
 		for (let stageIndex=thermalMap.length-1; stageIndex>=0; --stageIndex) {
 			let currentMapping = thermalMap[stageIndex];
@@ -87,7 +93,10 @@ ThermalViewer.prototype = {
 				currentColorValue = color;
 			}
 		}
-		this.addTextBlock(output, currentColorValue, unpackedCode.substring(startOffset));
+		
+		if (startOffset<unpackedCode.length) {
+			this.addTextBlock(output, currentColorValue, unpackedCode.substring(startOffset));
+		}
 
 		return output;
 	},

@@ -27,6 +27,7 @@ var testIssue0083_backslashToken = require("./testIssue0083_backslashToken");
 var testIssue0085_backslashSequenceLength = require("./testIssue0085_backslashSequenceLength");
 var testIssue0087_firstCharacterInPattern = require("./testIssue0087_firstCharacterInPattern");
 var testIssue0088_setIntervalAllocateVariable = require("./testIssue0088_setIntervalAllocateVariable");
+var testIssue0089_emptyThermalMapping = require("./testIssue0089_emptyThermalMapping");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -60,3 +61,4 @@ testIssue0083_backslashToken();
 testIssue0085_backslashSequenceLength();
 testIssue0087_firstCharacterInPattern();
 testIssue0088_setIntervalAllocateVariable();
+testIssue0089_emptyThermalMapping();
