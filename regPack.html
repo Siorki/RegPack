@@ -218,6 +218,7 @@ Attempt method hashing and renaming for
 <input type="checkbox" name="paramOHash2D" id="paramOHash2D" checked="checked"/>2D canvas context
 <input type="checkbox" name="paramOHashWebGL" id="paramOHashWebGL" checked="checked"/>WebGL canvas context
 <input type="checkbox" name="paramOHashAudio" id="paramOHashAudio" checked="checked"/>AudioContext
+<input type="checkbox" name="paramOHashAllObjects" id="paramOHashAllObjects" checked="checked"/>any object
 <br><input type="checkbox" name="paramOGlobalDefined" id="paramOGlobalDefined" checked="checked"/> Assume global variable <input type="text" size=6 value="c" id="paramOGlobalVariable" /> is a <select id="paramOGlobalType">
 <option value=0 selected>2D canvas context</option>
 <option value=1>WebGL canvas context</option>
@@ -291,6 +292,7 @@ function doRegPack() {
 		hash2DContext : document.getElementById("paramOHash2D").checked!="",
 		hashWebGLContext : document.getElementById("paramOHashWebGL").checked!="",
 		hashAudioContext : document.getElementById("paramOHashAudio").checked!="",
+		hashAllObjects : document.getElementById("paramOHashAllObjects").checked!="",
 		contextVariableName : document.getElementById("paramOGlobalDefined").checked!=""?document.getElementById("paramOGlobalVariable").value:false,
 		contextType : parseInt(document.getElementById("paramOGlobalType").value),
 		reassignVars : document.getElementById("paramOReassignVars").checked!="",

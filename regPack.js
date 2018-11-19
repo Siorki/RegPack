@@ -80,6 +80,7 @@ RegPack.prototype = {
 			hash2DContext : false,
 			hashWebGLContext : false,
 			hashAudioContext : false,
+			hashAllObjects : false,
 			contextVariableName : false,
 			contextType : parseInt(0),
 			reassignVars : true,

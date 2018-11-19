@@ -1,3 +1,6 @@
+New features :
+- #86 : Shorten context properties using available variable names
+
 Fixed bugs
 - #87 : Crusher always ignores first character when searching for patterns
 - #88 : Unable to allocate a variable name for setInterval()
