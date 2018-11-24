@@ -1,4 +1,5 @@
 New features :
+- #59 : Negated char class : optimal range merge
 - #86 : Shorten context properties using available variable names
 
 Fixed bugs

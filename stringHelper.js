@@ -310,6 +310,31 @@ var StringHelper = (function() {
 		}
 		
 		/**
+		 * Express an array of blocks(ranges) as a character class in a RegExp
+		 * by iteratively calling writeRangeToRegexpCharClass on each range, then concatenating the result
+		 * @see writeRangeToRegexpCharClass
+		 *
+		 * @param allRanges array of objects {first:..., last:..., size:...} to express as a character class 
+		 * @return a string representing the character class, without the encapsulating [ ]
+		 */
+		this.writeBlocksToRegexpCharClass = function(allRanges) {
+			var currentCharClass = "";
+			for (var blockIndex = 0 ; blockIndex < allRanges.length ; ++blockIndex) {
+				let oneRange = allRanges[blockIndex];
+				let rangeString = this.writeRangeToRegexpCharClass(oneRange.first, oneRange.last);
+				// Fix for issue #31 : if a token line begins with "-",
+				// add it at the beginning of the character class instead of appending it
+				if (oneRange.first==45) { // 45 is '-'
+					currentCharClass=rangeString+currentCharClass;
+				} else {
+					currentCharClass+=rangeString;
+				}
+			}
+			return currentCharClass;
+		}
+		
+		
+		/**
 		 * Returns true if the character requires a backlash as a prefix in the character class of the
 		 * RegExp to be interpreted as part of the expression
 		 * Character : \ (used to escape others)

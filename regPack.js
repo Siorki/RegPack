@@ -651,17 +651,7 @@ RegPack.prototype = {
 		}
 		
 		// build the character class
-		var tokenString = "";		
-		for (var i=0; i<=tokenLine; ++i) {
-			var rangeString = this.stringHelper.writeRangeToRegexpCharClass(tokenList[i].first, tokenList[i].last);
-			// Fix for issue #31 : if a token line consists in a single "-",
-			// add it at the beginning of the character class instead of appending it
-			if (rangeString.charCodeAt(0)==45) { // 45 is '-'
-				tokenString = rangeString+tokenString;
-			} else {
-				tokenString += rangeString;
-			}			
-		}
+		var tokenString = this.stringHelper.writeBlocksToRegexpCharClass(tokenList.slice(0, tokenLine+1));		
 
 		// escape the backslashes in the compressed code (from original code or added as token)
 		// #65 : do it now and not earlier so it applies on token \ as well
@@ -804,7 +794,7 @@ RegPack.prototype = {
 				regExpString+=rangeString;
 			}
 		}
-		details+=regExpString+"\n";
+		details+="initial expression : "+regExpString+"\n";
 
 
 		// Now, shorten the regexp by sacrificing some characters that will not be used as tokens.
@@ -818,98 +808,83 @@ RegPack.prototype = {
 		// The process is repeated while there are enough tokens left.
 		var margin = availableCharactersCount - packerData.tokenCount;
 		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
-		while (true) { // do not stop on margin==0, the next step may cost zero
-			var bestBlockIndex=[];
-			var bestGain = -999;
-			var bestCost = 999;
-			// gain may change at each step as we merge blocks, so qsort won't cut it
-			for (i=0;i<usedCharacters.length-1;++i) {
-				var currentBlock = usedCharacters[i];
-				var nextBlock = usedCharacters[i+1];
-				var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1, delimiterCode);
+		
+		// #59 : start with merging all ranges with cost 0
+		for (blockIndex=0; blockIndex<usedCharacters.length-1; ++blockIndex) {
+			var currentBlock = usedCharacters[blockIndex];
+			var nextBlock = usedCharacters[blockIndex+1];
+			var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1, delimiterCode);
+			
+			if (cost < .5) { // equal zero, as it cannot be negative => merge
 				var gain = currentBlock.size+nextBlock.size-3;
-				// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
-				if (currentBlock.first != currentBlock.last) {
-					gain+=this.stringHelper.writeCharToRegexpCharClass(currentBlock.last).length-1;
-				}
-				if (nextBlock.first != nextBlock.last) {
-					gain+=this.stringHelper.writeCharToRegexpCharClass(nextBlock.first).length-1;
-				}
-				// we cannot use the ratio gain/cost as cost may be 0, if the interval is only made of one forbidden character
-				if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
-					bestBlockIndex = [i];
-					bestCost = cost;
-					bestGain = gain;	// can be negative. Do not break yet, as the next one may be positive and offset the loss.
-				}
-				// attempt to merge three blocks in a row, to overcome a negative barrier
-				// (costly first merge, but that unlocks a gain of 3 or more)
-				// this helps getting rid of expensive characters such as ]
-				if (i<usedCharacters.length-2) {
-					var nextYetBlock = usedCharacters[i+2];
-					cost += nextYetBlock.first - nextBlock.last - 1  - this.countForbiddenCharacters(nextBlock.last+1, nextYetBlock.first-1, delimiterCode);
-					gain += nextYetBlock.size;
-					// extra gain if the character absorbed in a block needs a multibyte representation (escaped or unicode)
-					gain += this.stringHelper.writeCharToRegexpCharClass(nextBlock.last).length-1;
-					if (nextYetBlock.first != nextYetBlock.last) {
-						gain+=this.stringHelper.writeCharToRegexpCharClass(nextYetBlock.first).length-1;
-					}
-					if (cost<=margin && (gain*bestCost > bestGain*cost || (gain*bestCost == bestGain*cost && cost<bestCost))) {
-						bestBlockIndex = [i+1, i];
-						bestCost = cost;
-						bestGain = gain;
-					}
-				}
-			}
-			if (bestBlockIndex.length==0) break; // no matching block (negative gain, or too long)
-
-			for (i in bestBlockIndex) {
-				var blockIndex = bestBlockIndex[i];
-				var currentBlock = usedCharacters[blockIndex];	// accessed by reference of course
-				var nextBlock = usedCharacters[blockIndex+1];
 				currentBlock.last=nextBlock.last;
 				currentBlock.size=3;
 				usedCharacters.splice(1+blockIndex, 1);
-			}
-			margin -= bestCost;
+				
+				// log the improvement
+				details +="gain "+gain+" for 0, margin = "+margin+", ";
+				var currentCharClass = this.stringHelper.writeBlocksToRegexpCharClass(usedCharacters);
+				details += currentCharClass+"\n";
 
-			details +="gain "+bestGain+" for "+bestCost+", ";
-			details +="margin = "+margin+", ";
-
-			// build the regular expression for unpacking
-			// character 93 "]" needs escaping to avoid closing the character class
-			var currentCharClass = "";
-			for (i in usedCharacters)
-			{
-				j=usedCharacters[i];
-				var rangeString = this.stringHelper.writeRangeToRegexpCharClass(j.first, j.last);
-				// Fix for issue #31 : if a token line consists in a single "-",
-				// add it at the beginning of the character class instead of appending it
-				if (j.size==1 && j.first==45) { // 45 is '-'
-					currentCharClass=rangeString+currentCharClass;
-				} else {
-					currentCharClass+=rangeString;
-				}
-			}
-			details +=currentCharClass+"\n";
-			// keep the shortest RegExp - this may not be the last one if going through a negative gain streak
-			if (regExpString.length==0 || regExpString.length>currentCharClass.length) {
-				regExpString = currentCharClass;
 			}
 		}
-
-		regExpString = "^"+regExpString;
-		usedCharacters.push({first:128, last:128});	// upper boundary for the loop, increase to use multibyte characters as tokens
+	
+		// #59 : now test every possibility to bridge gaps by merging ranges
+		// the variable bridgeMap represents, in binary, the gaps that will be bridged in the current round
+		// bit at 0 = leave gap, bit at 1 = bridge by merging neighboring ranges
+		// If that removes more tokens than our margin allows, ignore that candidate and continue to next round
+		// Otherwise, keep the shortest expression of all rounds
+		var gapCount = usedCharacters.length - 1;
+		var bestRegExpLength = 127; // length can never exceed 1 byte per character in the ASCII range
+		var bestRegExpString = "";
+		var bestBlockMap = [];
+		details += gapCount+" gaps, testing "+(1<<gapCount)+" solutions.\n";
+		for (var bridgeMap = 0; bridgeMap< (1<<gapCount) ; ++bridgeMap) {
+			var mergedBlocks = [];
+			var totalCost = 0;
+			var blockBegin = usedCharacters[0].first;
+			for (var blockIndex = 0; blockIndex < gapCount; ++blockIndex) {
+				var bridgeNext = (bridgeMap & (1<<blockIndex));
+				var currentBlock = usedCharacters[blockIndex];
+				var nextBlock = usedCharacters[blockIndex+1];
+				if (bridgeNext) {
+					// if we bridge a gap, keep track of its cost ( = the potential tokens that are lost in the merge)
+					var cost = nextBlock.first - currentBlock.last - 1  - this.countForbiddenCharacters(currentBlock.last+1, nextBlock.first-1, delimiterCode);
+					totalCost += cost;
+				} else {
+					// otherwise, we end a block : add it to the block list, then open a new one
+					mergedBlocks.push( { first: blockBegin, last: currentBlock.last });
+					blockBegin = nextBlock.first;
+				}
+			}
+			mergedBlocks.push( { first: blockBegin, last: usedCharacters[usedCharacters.length-1].last });
+			
+			if (totalCost <= margin) {
+				// the solution has enough tokens left : now compare it to the current shortest
+				var regExpString = this.stringHelper.writeBlocksToRegexpCharClass(mergedBlocks);
+				if (regExpString.length < bestRegExpLength) {
+					bestRegExpLength = regExpString.length;
+					bestRegExpString = regExpString;
+					bestBlockMap = mergedBlocks.slice();
+					details +="solution at "+bestRegExpLength+", margin = "+(margin-totalCost)+", "+bestRegExpString+"\n";
+				}
+			}
+		}
+		
+	
+		bestRegExpString = "^"+bestRegExpString;
+		bestBlockMap.push({first:128, last:128});	// upper boundary for the loop, increase to use multibyte characters as tokens
 		var tokenString = "";
 		var charIndex = 1;
-		for (var i=0;i<usedCharacters.length;++i)
+		for (var i=0;i<bestBlockMap.length;++i)
 		{
-			while (charIndex<usedCharacters[i].first) {
+			while (charIndex<bestBlockMap[i].first) {
 				if (!this.isForbiddenCharacter(charIndex) &&  charIndex!=packerData.packedStringDelimiter.charCodeAt(0)) {
 					tokenString+=String.fromCharCode(charIndex);
 				}
 				++charIndex;
 			}
-			charIndex = 1+usedCharacters[i].last;
+			charIndex = 1+bestBlockMap[i].last;
 		}
 		details+= "tokens = "+tokenString+" ("+tokenString.length+")\n";
 
@@ -936,7 +911,7 @@ RegPack.prototype = {
 
 		// add the unpacking code to the compressed string
 		var unpackBlock1 = 'for('+packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
-		var unpackBlock2 = packerData.packedStringDelimiter+';G=/['+regExpString+']/.exec('+packerData.packedCodeVarName
+		var unpackBlock2 = packerData.packedStringDelimiter+';G=/['+bestRegExpString+']/.exec('+packerData.packedCodeVarName
 						  +');)with('+packerData.packedCodeVarName+'.split(G))'+packerData.packedCodeVarName+'=join(shift(';
 		var unpackBlock3 = '));';
 		var envMapping = [ { inLength : checkedString.length, outLength : checkedString.length, complete : false},
@@ -954,7 +929,7 @@ RegPack.prototype = {
 		details+="------------------------\nFinal check : ";
 		checkedString = checkedString.replace(new RegExp('\\\\'+packerData.packedStringDelimiter,'g'), packerData.packedStringDelimiter);		
 		checkedString = checkedString.replace(/\\\\/g, '\\');		
-		var regToken = new RegExp("["+regExpString+"]","");
+		var regToken = new RegExp("["+bestRegExpString+"]","");
 		for(var token="" ; token = regToken.exec(checkedString) ; ) {
 			var k = checkedString.split(token);
 			checkedString = k.join(k.shift());

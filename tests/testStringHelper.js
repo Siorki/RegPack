@@ -87,7 +87,8 @@ function testBase64() {
 }
 
 /**
- * Unit test for StringHelper.writeRangeToRegexpCharClass()
+ * Unit test for StringHelper.writeBlocksToRegexpCharClass()
+ *               StringHelper.writeRangeToRegexpCharClass()
  *               StringHelper.writeCharToRegexpCharClass()
  *               StringHelper.needsEscapingInCharClass()
  */
@@ -115,8 +116,16 @@ function testWriteRangeToRegexpCharClass () {
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(512, 767), "\\u0200-\\u02ff");	
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(110, 109), "");	
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(35, 33), "");	
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}]), "0-9");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:65, last:90}]), "A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:90}]), "0-9A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}]), "0-9A");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}, {first:67, last:67}]), "0-9AC");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}, {first:45, last:45}]), "-0-9A");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:45}, {first:65, last:90}]), "-[-_A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:46}, {first:65, last:90}]), "-.[-_A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:48}, {first:65, last:90}]), "--0[-_A-Z");
 }
-
 
 /**
  * Unit test for StringHelper.isActualCodeAt()

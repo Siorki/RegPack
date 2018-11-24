@@ -17,6 +17,7 @@ var testIssue0055_stringDelimiters = require("./testIssue0055_stringDelimiters")
 var testIssue0056_setIntervalDefaultParams = require("./testIssue0056_setIntervalDefaultParams");
 var testIssue0057_replacementInString = require("./testIssue0057_replacementInString");
 var testIssue0058_numberAsLoopVariable = require("./testIssue0058_numberAsLoopVariable");
+var testIssue0059_negatedRangeMerge = require("./testIssue0059_negatedRangeMerge");
 var testIssue0063_backtickFunctionParam = require("./testIssue0063_backtickFunctionParam");
 var testIssue0064_utf8EncodeURI = require("./testIssue0064_utf8EncodeURI");
 var testIssue0065_invalidEscapeSequence = require("./testIssue0065_invalidEscapeSequence");
@@ -51,6 +52,7 @@ testIssue0055_stringDelimiters();
 testIssue0056_setIntervalDefaultParams();
 testIssue0057_replacementInString();
 testIssue0058_numberAsLoopVariable();
+testIssue0059_negatedRangeMerge();
 testIssue0063_backtickFunctionParam();
 testIssue0064_utf8EncodeURI();
 testIssue0065_invalidEscapeSequence();
