@@ -48,6 +48,7 @@ var defaultOptions = {
 	timeVariableName : ""
 };
 
+var t0 = new Date();
 
 sources.forEach (function(referenceItem) {
 	var options = {};
@@ -64,8 +65,12 @@ sources.forEach (function(referenceItem) {
 	referenceItem.finalSize = regPack.packer.getByteLength(bestVal);
 });
 
+var tf = new Date();
+
+
 console.log(" ");
 console.log("BENCHMARK RESULTS :");
+console.log("Total time = "+((tf-t0)/1000)+" s");
 console.log("-----------------");
 
 sources.forEach (function(referenceItem) {

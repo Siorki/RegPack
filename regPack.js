@@ -61,7 +61,7 @@ function RegPack() {
 	this.preprocessor = new ShapeShifter();
 }
 
-var details, x, e, N, M, bestValue, bestLength, Z1, j;
+var e, N, M, Z1, j;
 
 RegPack.prototype = {
 
@@ -162,49 +162,48 @@ RegPack.prototype = {
 		var s = packerData.contents;
 		packerData.matchesLookup = [];
 		var transform = [];
-		details='';
+		var details='';
 		// #55 : 34(") and 39(') now allowed, as long as they are not the chosen delimiter
 		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
 		var Q=[];for(var i=0;++i<127;i-10&&i-13&&i-delimiterCode&&i-92&&Q.push(String.fromCharCode(i)));
+		
+		// Identify matches - search all string space for possible matches (all strings present more than once)
 		var matches = {};
-		for(var tokens='';;tokens=c+tokens) {
-			for(var c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
-			if(!c)break;
-			if (tokens.length==0) {	// search all string space for possible matches
-				var found=true;	// stop as soon as no substring of length t is found twice
-				for(var t=2;found;++t) {
-					found=false;
-					for(i=0;i<s.length-t;++i) {
-						var beginCode = s.charCodeAt(i);
-						var endCode = s.charCodeAt(i+t-1);
-						// #50 : if the first character is a low surrogate (second character of a surrogate pair
-						// representing an astral character), skip it - we cannot have it begin the string
-						// and thus break the pair
-						// Same issue if the last character is a high surrogate (first in surrogate pair).
-						if ((beginCode<0xDC00 || beginCode>0xDFFF)
-							&& (endCode<0xD800 || endCode>0xDBFF)) {
-							if(!matches[x=s.substr(j=i,t)])
+		var found=true;	// stop as soon as no substring of length t is found twice
+		for(var t=2;found;++t) {
+			found=false;
+			for(i=0;i<s.length-t;++i) {
+				var beginCode = s.charCodeAt(i);
+				var endCode = s.charCodeAt(i+t-1);
+				// #50 : if the first character is a low surrogate (second character of a surrogate pair
+				// representing an astral character), skip it - we cannot have it begin the string
+				// and thus break the pair
+				// Same issue if the last character is a high surrogate (first in surrogate pair).
+				if ((beginCode<0xDC00 || beginCode>0xDFFF)
+					&& (endCode<0xD800 || endCode>0xDBFF)) {
+					var pattern = s.substr(j=i,t);
+					if(!matches[pattern]) {
+						if(~(j=s.indexOf(pattern,j+t)))
+						{
+							found=true;
+							for(matches[pattern]=1;~j;matches[pattern]++)
 							{
-								if(~(j=s.indexOf(x,j+t)))
-								{
-									found=true;
-									for(matches[x]=1;~j;matches[x]++)
-									{
-										j=s.indexOf(x,j+t);
-									}
-								}
+								j=s.indexOf(pattern,j+t);
 							}
 						}
 					}
 				}
-			} else {	// only recompute the values of previously found matches
-				var newMatches={};
-				for(x in matches)
-					for(j=s.indexOf(x),newMatches[x]=0;~j;newMatches[x]++)j=s.indexOf(x,j+x.length);
-				matches = newMatches;
 			}
-
-			bestLength=bestValue=M=N=e=Z=0;
+		}
+		
+		// Main loop : replace matches by tokens, one every iteration
+		for(var tokens='';;tokens=c+tokens) {
+			for(var c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
+			if(!c)break;
+		
+			// find the string with the best score (combination of gain, length, copies, and tiebreaker)
+			var bestLength = 0, bestValue = 0;
+			M=N=e=Z=0;
 			for(i in matches){
 				j=this.getEscapedByteLength(i);
 				R=matches[i];
@@ -217,31 +216,39 @@ RegPack.prototype = {
 					delete matches[i];
 				}
 			}
+
 			if(M<1)
 				break;
 
-			// update the other matches in case the selected one is a substring thereof
-			var newMatches={};
-			for(x in matches) {
-				newMatches[x.split(e).join(c)]=1;
-			}
-			matches = newMatches;
-
-			// and apply the compression to the string
+			// apply the compression to the string
 			s = this.stringHelper.matchAndReplaceAll(s, false, e, c, "", c+e, 0, transform);
 			//s=s.split(e).join(c)+c+e;
 			packerData.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
 			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
+
+			// update the other matches in case the selected one is a substring thereof
+			// #92 : moved at this point of the loop, since the initial pattern identification is now done before the loop
+			// Also performs the final update for #47 so that the remaining matches are known
+			// for the packer stage, which may use more tokens than the crusher
+			var newMatches={};
+			for(var oldPattern in matches) {
+				var newPattern = oldPattern.split(e).join(c);
+				var newLength = newPattern.length;
+				if (newLength > 1) { // do not keep the strings already replaced by a token
+					var offset = s.indexOf(newPattern);
+					if (offset >= 0) {
+						var matchCount = 0;
+						while (offset >= 0) {
+							++matchCount;
+							offset = s.indexOf(newPattern,offset+newLength);
+						}
+						newMatches[newPattern]=matchCount;
+					}
+				}
+			}
+			matches = newMatches;
 		}
 		
-		// Needed for #47 : list matches that did not find a token
-		// As the packer may have more tokens available than the crusher 
-		// First, update the matches count
-		var newMatches={};
-		for(x in matches) {
-			for(j=s.indexOf(x),newMatches[x]=0;~j;newMatches[x]++)j=s.indexOf(x,j+x.length);
-		}
-		matches = newMatches;
 
 		var firstLine = true;
 		for(i in matches){
