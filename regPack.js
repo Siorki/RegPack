@@ -61,8 +61,6 @@ function RegPack() {
 	this.preprocessor = new ShapeShifter();
 }
 
-var e, N, M, Z1, j;
-
 RegPack.prototype = {
 
 
@@ -159,36 +157,50 @@ RegPack.prototype = {
 	 * @return array [length, packed string, log]
 	 */
 	findRedundancies : function(packerData, options) {
-		var s = packerData.contents;
+		var packedString = packerData.contents;
 		packerData.matchesLookup = [];
 		var transform = [];
 		var details='';
-		// #55 : 34(") and 39(') now allowed, as long as they are not the chosen delimiter
+		// Allowed tokens : everything in the ASCII range except
+		//  - 0 and 127 (excluded from loop)
+		//  - any character present in the input string
+		//  - LF(10) and CR(13), not allowed in code nor as tokens
+		//  - \ (92) since it requires escaping
+		// New since #55, "(34) and '(39) are allowed as long as they are not the delimiter for the string
 		var delimiterCode = packerData.packedStringDelimiter.charCodeAt(0);
-		var Q=[];for(var i=0;++i<127;i-10&&i-13&&i-delimiterCode&&i-92&&Q.push(String.fromCharCode(i)));
+		var tokenList = [];
+		for(var tokenCode=126 ; tokenCode>0 ; --tokenCode) {
+			if (tokenCode!=10 && tokenCode!=13 && tokenCode!=92 && tokenCode!= delimiterCode) {
+				var token = String.fromCharCode(tokenCode);
+				if (packedString.indexOf(token)==-1) {
+					tokenList.push(token);
+				}
+			}
+		}
 		
 		// Identify matches - search all string space for possible matches (all strings present more than once)
 		var matches = {};
 		var found=true;	// stop as soon as no substring of length t is found twice
 		for(var t=2;found;++t) {
 			found=false;
-			for(i=0;i<s.length-t;++i) {
-				var beginCode = s.charCodeAt(i);
-				var endCode = s.charCodeAt(i+t-1);
+			for(i=0;i<packedString.length-t;++i) {
+				var beginCode = packedString.charCodeAt(i);
+				var endCode = packedString.charCodeAt(i+t-1);
 				// #50 : if the first character is a low surrogate (second character of a surrogate pair
 				// representing an astral character), skip it - we cannot have it begin the string
 				// and thus break the pair
 				// Same issue if the last character is a high surrogate (first in surrogate pair).
 				if ((beginCode<0xDC00 || beginCode>0xDFFF)
 					&& (endCode<0xD800 || endCode>0xDBFF)) {
-					var pattern = s.substr(j=i,t);
+					var j=i;
+					var pattern = packedString.substr(i,t);
 					if(!matches[pattern]) {
-						if(~(j=s.indexOf(pattern,j+t)))
+						if(~(j=packedString.indexOf(pattern,j+t)))
 						{
 							found=true;
 							for(matches[pattern]=1;~j;matches[pattern]++)
 							{
-								j=s.indexOf(pattern,j+t);
+								j=packedString.indexOf(pattern,j+t);
 							}
 						}
 					}
@@ -197,34 +209,34 @@ RegPack.prototype = {
 		}
 		
 		// Main loop : replace matches by tokens, one every iteration
-		for(var tokens='';;tokens=c+tokens) {
-			for(var c=0,i=122;!c&&--i;!~s.indexOf(Q[i])&&(c=Q[i]));
-			if(!c)break;
+		var tokensInUse = '';
+		for(var tokenIndex = 0; tokenIndex < tokenList.length ; ++tokenIndex) {
+			var token = tokenList[tokenIndex];
 		
 			// find the string with the best score (combination of gain, length, copies, and tiebreaker)
-			var bestLength = 0, bestValue = 0;
-			M=N=e=Z=0;
+			var bestLength = 0, bestValue = 0, bestMatch = 0, bestGain = 0, bestCopies = 0;
 			for(i in matches){
-				j=this.getEscapedByteLength(i);
-				R=matches[i];
-				Z=R*j-R-j-2;	// -1 used in JS Crush performs replacement with zero gain
-				value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
-				if(Z>0) {
-					if(value>bestValue||bestValue==value&&(Z>M||Z==M&&(options.crushTiebreakerFactor*R>options.crushTiebreakerFactor*N))) // R>N JsCrush, R<N First Crush
-						M=Z,N=R,e=i,bestValue=value,bestLength=j;
-				} else if (R<2) {
-					delete matches[i];
-				}
+				var stringLength = this.getEscapedByteLength(i);
+				var copies=matches[i];
+				var gain=copies*stringLength-copies-stringLength-2;	// -1 used in JS Crush performs replacement with zero gain
+				value=options.crushGainFactor*gain+options.crushLengthFactor*stringLength+options.crushCopiesFactor*copies;
+				if(gain>0) {
+					if(value>bestValue||bestValue==value&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*copies>options.crushTiebreakerFactor*bestCopies)))  { 
+						// copies>bestCopies JsCrush, copies<bestCopies First Crush
+						bestGain=gain, bestCopies=copies, bestMatch=i, bestValue=value, bestLength=stringLength;
+					}
+				} 
 			}
 
-			if(M<1)
+			if(bestGain<1)
 				break;
 
 			// apply the compression to the string
-			s = this.stringHelper.matchAndReplaceAll(s, false, e, c, "", c+e, 0, transform);
-			//s=s.split(e).join(c)+c+e;
-			packerData.matchesLookup.push({token:c, string:e, originalString:e, depends:'', usedBy:'', gain:M, copies:N, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
-			details+=c.charCodeAt(0)+"("+c+") : val="+bestValue+", gain="+M+", N="+N+", str = "+e+"\n";
+			packedString = this.stringHelper.matchAndReplaceAll(packedString, false, bestMatch, token, "", token+bestMatch, 0, transform);
+			//packedString=packedString.split(bestMatch).join(token)+token+bestMatch;
+			packerData.matchesLookup.push({token:token, string:bestMatch, originalString:bestMatch, depends:'', usedBy:'', gain:bestGain, copies:bestCopies, len:bestLength, score:bestValue, cleared:false, newOrder:9999});
+			tokensInUse=token+tokensInUse;
+			details+=token.charCodeAt(0)+"("+token+") : val="+bestValue+", gain="+bestGain+", N="+bestCopies+", str = "+bestMatch+"\n";
 
 			// update the other matches in case the selected one is a substring thereof
 			// #92 : moved at this point of the loop, since the initial pattern identification is now done before the loop
@@ -232,15 +244,15 @@ RegPack.prototype = {
 			// for the packer stage, which may use more tokens than the crusher
 			var newMatches={};
 			for(var oldPattern in matches) {
-				var newPattern = oldPattern.split(e).join(c);
+				var newPattern = oldPattern.split(bestMatch).join(token);
 				var newLength = newPattern.length;
 				if (newLength > 1) { // do not keep the strings already replaced by a token
-					var offset = s.indexOf(newPattern);
+					var offset = packedString.indexOf(newPattern);
 					if (offset >= 0) {
 						var matchCount = 0;
 						while (offset >= 0) {
 							++matchCount;
-							offset = s.indexOf(newPattern,offset+newLength);
+							offset = packedString.indexOf(newPattern,offset+newLength);
 						}
 						newMatches[newPattern]=matchCount;
 					}
@@ -252,34 +264,34 @@ RegPack.prototype = {
 
 		var firstLine = true;
 		for(i in matches){
-			var j=this.getEscapedByteLength(i);
-			var R=matches[i];
-			var Z=R*j-R-j-2;	
-			if (Z>0) {
+			var stringLength = this.getEscapedByteLength(i);
+			var copies=matches[i];
+			var gain=copies*stringLength-copies-stringLength-2;	
+			if (gain>0) {
 				if (firstLine) {
 					details += "\n--- Potential gain, but not enough tokens ---\n";
 					firstLine = false;
 				}
-				var value=options.crushGainFactor*Z+options.crushLengthFactor*j+options.crushCopiesFactor*R;
-				details+="..( ) : val="+value+", gain="+Z+", N="+R+", str = "+i+"\n";
-				packerData.matchesLookup.push({token:"", string:i, originalString:i, depends:'', usedBy:'', gain:Z, copies:R, len:j, score:value, cleared:false, newOrder:9999});
+				var value=options.crushGainFactor*gain+options.crushLengthFactor*stringLength+options.crushCopiesFactor*copies;
+				details+="..( ) : val="+value+", gain="+gain+", N="+copies+", str = "+i+"\n";
+				packerData.matchesLookup.push({token:"", string:i, originalString:i, depends:'', usedBy:'', gain:gain, copies:copies, len:stringLength, score:value, cleared:false, newOrder:9999});
 			}
 		}
 		
 		// Implementation for #48 : show the patterns that are "almost" gains 
 		firstLine = true;
 		for(i in matches){
-			j=this.getEscapedByteLength(i);
-			R=matches[i];
-			Z=R*j-R-j-2;	
-			Z1=(R+1)*j-(R+1)-j-2;
-			if (Z<=0 && Z1>0) {
+			var stringLength = this.getEscapedByteLength(i);
+			var copies=matches[i];
+			var gain=copies*stringLength-copies-stringLength-2;	
+			var gainPlusOne=(copies+1)*stringLength-(copies+1)-stringLength-2;
+			if (gain<=0 && gainPlusOne>0) {
 				if (firstLine) {
 					details += "\n--- One extra occurrence needed for a gain --\n";
 					firstLine = false;
 				}
-				value=options.crushGainFactor*Z1+options.crushLengthFactor*j+options.crushCopiesFactor*R;
-				details+="   val="+value+", gain="+Z+"->"+Z1+" (+"+(Z1-Z)+"), N="+R+", str = "+i+"\n";
+				value=options.crushGainFactor*gainPlusOne+options.crushLengthFactor*stringLength+options.crushCopiesFactor*copies;
+				details+="   val="+value+", gain="+gain+"->"+gainPlusOne+" (+"+(gainPlusOne-gain)+"), N="+copies+", str = "+i+"\n";
 			}
 		}
 
@@ -292,16 +304,16 @@ RegPack.prototype = {
 		}
 		
 		// escape the backslashes present in the code
-		var packedString = this.stringHelper.matchAndReplaceAll(s, false, '\\', '\\\\', '', '', 0, transform); 
+		packedString = this.stringHelper.matchAndReplaceAll(packedString, false, '\\', '\\\\', '', '', 0, transform); 
 		
 		// escape the occurrences of the string delimiter present in the code
 		packedString = this.stringHelper.matchAndReplaceAll(packedString, false, packerData.packedStringDelimiter, '\\'+packerData.packedStringDelimiter, "", "", 0, transform);
-		//var packedString = s.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
+		//var packedString = packedString.replace(new RegExp(packerData.packedStringDelimiter,"g"),'\\'+packerData.packedStringDelimiter);
 		
 		// and put everything together
 		var unpackBlock1 = packerData.packedCodeVarName+'='+packerData.packedStringDelimiter;
 		var unpackBlock2 = packerData.packedStringDelimiter
-						  +loopInitCode+packerData.packedStringDelimiter+tokens+packerData.packedStringDelimiter
+						  +loopInitCode+packerData.packedStringDelimiter+tokensInUse+packerData.packedStringDelimiter
 						  +')with('+packerData.packedCodeVarName+'.split('+loopMemberCode+'))'
 						  +packerData.packedCodeVarName+'=join(pop(';
 		var unpackBlock3 = '));';
@@ -492,8 +504,10 @@ RegPack.prototype = {
 					var gain = count*(packerData.matchesLookup[j].len-tokenCost)-packerData.matchesLookup[j].len-2*tokenCost;
 					var score = options.crushGainFactor*gain+options.crushLengthFactor*packerData.matchesLookup[j].len+options.crushCopiesFactor*count;
 					if (gain>=0) {
-						if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*count>options.crushTiebreakerFactor*bestCount))) // R>N JsCrush, R<N First Crush
+						if (score>bestScore||score==bestScore&&(gain>bestGain||gain==bestGain&&(options.crushTiebreakerFactor*count>options.crushTiebreakerFactor*bestCount))) { 
+							// R>N JsCrush, R<N First Crush
 							bestGain=gain,bestCount=count,matchIndex=j,bestScore=score;
+						}
 					} else {
 						// found a negative. The matching string may no longer be packed (if anything, match count will decrease, not increase)
 						// so we clear it (ie remove it from the dependency chain). This in turns allows strings it uses to be packed,

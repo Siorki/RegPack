@@ -781,9 +781,6 @@ ShapeShifter.prototype = {
 		var charsNeededForReassignModule = 0;
 		var formerVariableCharList = "";
 		for (var i=32; i<128; ++i) {
-			if (variableChars[i]) {
-				details+=String.fromCharCode(i);
-			}
 			// Identify as available all characters used in keywords but not variables
 			if (availableChars[i]) {
 				availableCharList+=String.fromCharCode(i);
