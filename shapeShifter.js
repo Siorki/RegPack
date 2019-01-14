@@ -52,6 +52,7 @@ ShapeShifter.prototype = {
 	 *       -  hash2DContext : (splitter) true if the option "Hash and rename 2D canvas context" was selected, false otherwise
 	 *       -  hashWebGLContext : (splitter) true if the option "Hash and rename WebGL canvas context" was selected, false otherwise
 	 *       -  hashAudioContext : (splitter) true if the option "Hash and rename AudioContext" was selected, false otherwise
+	 *       -  hashAllObjects : (splitter) true if the option "Hash and rename properties for any object" was selected, false otherwise
 	 *       -  contextVariableName : a string representing the variable holding the context if the "assume context" option was selected, false otherwise
 	 *       -  contextType : the context type (0=2D, 1=WebGL) if the "assume context" option was selected, irrelevant otherwise
 	 *       -  reassignVars : true to globally reassign variable names 
@@ -131,10 +132,21 @@ ShapeShifter.prototype = {
 				inputList.push(...newBranches); // ES6 syntax : concatenate arrays
 			}
 		}
+		
+		// #86 : for all objects, using a variable as container for the method or property name
+		if (options.hashAllObjects) {
+			for (var count=inputList.length, i=0; i<count; ++i) {
+				var newBranchData = this.hashPropertyNamesAsVariables(inputList[i], options);
+				if (newBranchData[0]) { // true if at least one property was assigned to a variable
+					inputList.push(newBranchData[1]); 
+				}
+			}
+		}
+		
 		inputList[0].name="unhashed";
 
 		for (var i=0; i<inputList.length; ++i) {
-			this.identifyStrings(inputList[i]);
+			this.identifyStrings(inputList[i], false);
 			// call module : quote strings
 			this.quoteStrings(inputList[i], options);
 			if (options.reassignVars) {
@@ -231,7 +243,7 @@ ShapeShifter.prototype = {
 			
 			if (timeVariableName=="") {
 				timeVariableProvided = false;
-				timeVariableName = this.allocateNewVariable(inputData);
+				timeVariableName = this.allocateNewVariable(inputData, options);
 				details += "Using variable "+timeVariableName+" for time.\n";
 			}
 			
@@ -696,7 +708,111 @@ ShapeShifter.prototype = {
 		return [];
 	},
 	
+	/**
+	 * Implementation of #86
+	 * Identifies method and object properties names used multiple times
+	 * Stores their name as a variable on the first occurrence, then use the variable as a property afterwards
+	 *
+	 * c.fillStyle becomes c[F="fillStyle"] the first time then c[F] afterwards.
+	 *
+	 * The advantage over hashing schemes is that this works with different objects sharing the same property
+	 *
+	 * Variables assigned that way are from the same pool that would be used for reassignment,
+	 * but leaving enough for that module to complete.
+	 *
+	 * Returns an array [boolean, PackerData]
+	 *  - the boolean is true if at least one property name was packed that way, false if no change occurred
+	 *  - the PackerData derives from the input with the packed properties 
+	 *
+	 * @param inputData (constant) PackerData structure containing the code to refactor and setup 
+	 * @param options : preprocessing options, as follows
+	 *       -  reassignVars : true to globally reassign variable names 
+	 *       -  varsNotReassigned : string or array listing all protected variables (whose name will not be modified)
+	 *       -  wrapInSetInterval : true to wrap the unpacked code in a setInterval() call instead of eval()
+	 *       -  timeVariableName : if "setInterval" option is set, the variable to use for time (zero on first loop, nonzero after)
+	 * @return an array containing [boolean, PackerData] as described above
+	 */
+	hashPropertyNamesAsVariables : function (inputData, options) {
+		var outputData = PackerData.clone(inputData, " all_properties");
+		var input = outputData.contents;
 
+		// Anything inside strings (save for template literals) is ignored.
+		// Strings boundaries will be identified again after the preprocessing is done
+		this.identifyStrings(outputData, true); 
+		
+		var propertiesInUse=[];
+		var propertiesMatchData=[];
+		var exp = new RegExp("\\.(\\w*)\\W","g");
+		var result=exp.exec(input);
+		while (result) {	// get a set with a unique entry for each method
+			var recordIndex = propertiesInUse.indexOf(result[1]);
+			if (this.stringHelper.isActualCodeAt(recordIndex, outputData)) {
+				if (recordIndex == -1) { 
+					propertiesInUse.push(result[1]);	
+					propertiesMatchData.push({name:result[1], count:1, offset:exp.lastIndex});
+				} else {
+					++propertiesMatchData[recordIndex].count;
+				}
+			}
+			result=exp.exec(input);
+		}
+	
+			
+		for (var index=0; index<propertiesMatchData.length; ++index) {
+			var rawCost = (1+propertiesMatchData[index].name.length) * propertiesMatchData[index].count;
+			var hashedCost = propertiesMatchData[index].name.length + 6 + (propertiesMatchData[index].count-1)*3;
+			propertiesMatchData[index].gain = rawCost - hashedCost;
+		
+		}
+	
+		// sort by decreasing gain, offset as tiebreaker to ensure a deterministic result
+		// even when there are equivalent gains
+		propertiesMatchData.sort(function(a,b) { return b.gain-a.gain + (b.offset-a.offset)/10000; });
+		
+		outputData.log += "----------- Storing property names into variables ----------- \n";
+		
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData, options);
+		var keywordChars = keywordsAndVariables[0];
+		var variableChars = keywordsAndVariables[1];
+		var availableChars = keywordsAndVariables[2];
+		var variableCharsOnly = keywordsAndVariables[3];
+		
+		var availableCharList = "";
+		var charsNeededForReassignModule = 0;
+		var formerVariableCharList = "";
+		for (var i=32; i<128; ++i) {
+			// Identify as available all characters used in keywords but not variables
+			if (availableChars[i]) {
+				availableCharList+=String.fromCharCode(i);
+			}
+			// Simply count variables that need to be renamed, if the "reassign variables" module is active
+			// They shall be deducted from our pool
+			if (variableCharsOnly[i] && options.reassignVars) {
+				++charsNeededForReassignModule;
+			}
+		}
+		var availableVariableCount = availableCharList.length - charsNeededForReassignModule;
+		var processedInput = outputData.contents;
+		for (var index=0 ; index<propertiesMatchData.length && propertiesMatchData[index].gain>0 && index<availableVariableCount ; ++index) {
+		
+			// on the first occurrence, declare the variable
+			var declarationReplacement = '['+availableCharList[index]+'="'+propertiesMatchData[index].name+'"]';
+			// replace all other occurences without the declaration
+			var otherReplacement = '['+availableCharList[index]+']';
+			processedInput = this.stringHelper.matchAndReplaceFirstAndAll(processedInput, false, '.'+propertiesMatchData[index].name, declarationReplacement, otherReplacement, "", "", 0, outputData.thermalMapping);
+			
+			outputData.log += availableCharList[index] + '="' + propertiesMatchData[index].name+ '" (x'+propertiesMatchData[index].count + ') : gain = '+propertiesMatchData[index].gain+"\n";		
+		}
+		
+		// log the replacements missed for lack of a token
+		for ( ; index<propertiesMatchData.length && propertiesMatchData[index].gain>0 ; ++index) {
+			outputData.log += 'No token left : "' + propertiesMatchData[index].name+ '" (x'+propertiesMatchData[index].count + ') : missed gain = '+propertiesMatchData[index].gain+"\n";		
+		}
+				
+		outputData.contents = processedInput; 
+		return [index>0, outputData];
+	},
+	
 	
 	/**
 	 * Identifies the optimal hashing function (the one returning the shortest result)
@@ -1355,18 +1471,20 @@ ShapeShifter.prototype = {
 	 * If none is available, it returns a two-letter variable.
 	 * 
 	 * @param inputData (constant) PackerData structure containing the input code
+	 * @param options options set, used by discriminateKeywordsAndVariables()
 	 * @return the name of the new variable, as a string
 	 * @see discriminateKeywordsAndVariables
 	 */
-	allocateNewVariable : function(inputData)
+	allocateNewVariable : function(inputData, options)
 	{
-		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData);
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData, options);
 		var keywordChars = keywordsAndVariables[0];
 		var variableChars = keywordsAndVariables[1];
+		var availableChars = keywordsAndVariables[2];
 		
 		// first, characters already used by functions, keywords ..
 		for (var i=33; i<128; ++i) {
-			if (keywordChars[i] && !variableChars[i] && this.isCharAllowedInVariable(i) && !this.isDigit(i)) {
+			if (availableChars[i]) {
 				return String.fromCharCode(i);
 			}
 		}
@@ -1402,18 +1520,24 @@ ShapeShifter.prototype = {
 	 * @see allocateNewVariable
 	 * 
 	 * @param inputData PackerData structure containing the setup and the code to process
-	 * @return array [ keywords, variables ], each is a boolean [128]
+	 * @param options options set, see below for use details
+	 * Options used are :
+	 *  - varsNotReassigned : boolean array[128], true to avoid altering variable
+	 * @return array [ keywords, variables, available for new variables, variables only ], each is a boolean [128]
+	 *  - keywords : true if the character is present in keywords, false otherwise
+	 *  - variables : true if the character is already used as a variable, false otherwise
+	 *  - available : true if the character is present in keywords but not used as a variable, false otherwise
 	 */
-	discriminateKeywordsAndVariables : function(inputData)
+	discriminateKeywordsAndVariables : function(inputData, options)
 	{
-		var variableChars = [];
-		var keywordChars = [];
+		var varsNotReassigned = options.varsNotReassigned;
+		var variableChars = [], keywordChars = [], availableChars = [], variableCharsOnly = [];
 		var previousChar = 0;
 		var letterCount = 0;
 		var isKeyword = false;
 		var input = inputData.contents;
 		for (var i=0; i<128; ++i) {
-			variableChars[i] = keywordChars[i] = false;
+			variableChars[i] = keywordChars[i] = availableChars[i] = variableCharsOnly[i] = false;
 		}
 		// Identify characters used in the code :
 		//  - those used only in keywords, method names.
@@ -1469,7 +1593,16 @@ ShapeShifter.prototype = {
 				previousChar=currentChar;
 			}
 		}
-		return [ keywordChars, variableChars];
+
+		// Identify as available all characters used in keywords but not variables
+		// And those that should be reassigned, if the options is set
+		// #86 : factored here as available variable names are used in multiple places
+		for (var i=33; i<128; ++i) {
+			availableChars[i] = keywordChars[i] && !variableChars[i] && this.isCharAllowedInVariable(i) && !this.isDigit(i);
+			variableCharsOnly[i] = variableChars[i] && !keywordChars[i] && !varsNotReassigned[i];
+		}
+		
+		return [ keywordChars, variableChars, availableChars, variableCharsOnly ];
 	},
 	
 	/**
@@ -1497,44 +1630,36 @@ ShapeShifter.prototype = {
 	reassignVariableNames : function (inputData, options)
 	{
 		var varsNotReassigned = options.varsNotReassigned;
-		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData);
+		var keywordsAndVariables = this.discriminateKeywordsAndVariables(inputData, options);
 		var keywordChars = keywordsAndVariables[0];
 		var variableChars = keywordsAndVariables[1];
+		var availableChars = keywordsAndVariables[2];
+		var variableCharsOnly = keywordsAndVariables[3];
 		var input = inputData.contents;
 		
 		var details = "----------- Renaming variables to optimize RegExp blocks --------\n";
 		details += "All variables : ";
+		
+		var availableCharList = "";
+		var formerVariableCharList = "";
 		for (var i=32; i<128; ++i) {
 			if (variableChars[i]) {
 				details+=String.fromCharCode(i);
 			}
-		}
-		details +="\n";
-		
-		var availableCharList = "";
-		var formerVariableCharList = "";
-		var detailsSub1 = "";
-		var detailsSub2 = "";		
-		for (var i=32; i<128; ++i) {
 			// Identify as available all characters used in keywords but not variables
-			if (keywordChars[i] && !variableChars[i] && !this.isDigit(i)) {
+			if (availableChars[i]) {
 				availableCharList+=String.fromCharCode(i);
-				detailsSub1+=String.fromCharCode(i);
 			}
 			// List all variables that can be reassigned a new name.
 			// This excludes those with a one-letter name already used in a keyword (no gain in renaming them)
 			// and those explicitely excluded from the process by the user.
-			if (variableChars[i] && !keywordChars[i] && !varsNotReassigned[i]) {
+			if (variableCharsOnly[i]) {
 				formerVariableCharList+=String.fromCharCode(i);
-				detailsSub2+=String.fromCharCode(i);
 			}
 		}
-		if (!availableCharList.length) {
-			detailsSub1 = "(none)";
-		}
-		if (!formerVariableCharList.length) {
-			detailsSub2 = "(none)";
-		}
+		var detailsSub1 = availableCharList.length ? availableCharList : "(none)";
+		var detailsSub2 = formerVariableCharList.length ? formerVariableCharList : "(none)";
+		details +="\n";
 		details += "in keywords only : " + detailsSub1 + "\nin variables only : " + detailsSub2 + "\n\n";
 
 		// Prepare to rename variables
@@ -1567,6 +1692,10 @@ ShapeShifter.prototype = {
 						blockStartsAt = -1;
 					}
 				}
+			}
+			// Fix for #94 : add the lask block if it was initialized
+			if (blockStartsAt!=-1) {
+				unusedBlocks.push( {first:blockStartsAt, nextToLast:i});
 			}
 			
 			// There will always be enough characters, since we count those we are trying to eliminate
@@ -1657,10 +1786,14 @@ ShapeShifter.prototype = {
 	 *  - delimiters used : ", ' or `(since ES6)
 	 *  - other delimiters present inside the string
      *  - if the string definition and allocation is standalone, and could thus be extracted	 
+	 *
+	 * Fields from the PackerData are cleared before they are filled, making the function safe to call multiple times
+	 *
 	 * @param inputData (in/out) PackerData structure containing the setup and the code to process
+	 * @param silent Boolean, true to keep logs untouched, false to add strings to the logs
 	 * @return nothing. Result is stored inside parameter inputData (containedStrings and containedTemplateLiterals)
 	 */
-	identifyStrings : function (inputData)
+	identifyStrings : function (inputData, silent)
 	{
 		var details = "\nStrings present in the code :\n";
 		var inString = false;
@@ -1670,6 +1803,9 @@ ShapeShifter.prototype = {
 		var escaped = false;
 		var insideTemplateLiteral = 0;
 		var currentChar = 0;
+		
+		inputData.containedStrings = [];
+		inputData.containedTemplateLiterals = [];
 
 		for (var i=0; i<input.length; ++i) {
 			var formerChar = currentChar;
@@ -1726,7 +1862,9 @@ ShapeShifter.prototype = {
 			details += input.substr(currentString.begin-1, currentString.end-currentString.begin+2)+"\n";
 		}
 		
-		inputData.log+=details+"\n";
+		if (!silent) {
+			inputData.log+=details+"\n";
+		}
 		
 	},
 	
