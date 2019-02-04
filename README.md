@@ -1,4 +1,4 @@
-**RegPack** is a packer intended for use on minified Javascript code. Current revision is 5.0.2
+**RegPack** is a packer intended for use on minified Javascript code. Current revision is 5.0.3
 
 It is mostly suited to small size constraints (1kb, up to 4kb).
 
