@@ -1,4 +1,5 @@
 var StringHelper = require("../stringHelper")
+var PackerData = require("../packerData");
 var fs = require("fs");
 var assert = require("assert");
 
@@ -8,6 +9,7 @@ function runTests() {
 	testGetByteLength();
 	testBase64();
 	testWriteRangeToRegexpCharClass();
+	testIsActualCodeAt();
 	console.log("StringHelper tests : done");
 }
 
@@ -85,7 +87,8 @@ function testBase64() {
 }
 
 /**
- * Unit test for StringHelper.writeRangeToRegexpCharClass()
+ * Unit test for StringHelper.writeBlocksToRegexpCharClass()
+ *               StringHelper.writeRangeToRegexpCharClass()
  *               StringHelper.writeCharToRegexpCharClass()
  *               StringHelper.needsEscapingInCharClass()
  */
@@ -113,6 +116,49 @@ function testWriteRangeToRegexpCharClass () {
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(512, 767), "\\u0200-\\u02ff");	
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(110, 109), "");	
 	assert.equal (stringHelper.writeRangeToRegexpCharClass(35, 33), "");	
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}]), "0-9");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:65, last:90}]), "A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:90}]), "0-9A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}]), "0-9A");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}, {first:67, last:67}]), "0-9AC");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:48, last:57}, {first:65, last:65}, {first:45, last:45}]), "-0-9A");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:45}, {first:65, last:90}]), "-[-_A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:46}, {first:65, last:90}]), "-.[-_A-Z");
+	assert.equal (stringHelper.writeBlocksToRegexpCharClass([{first:91, last:95}, {first:45, last:48}, {first:65, last:90}]), "--0[-_A-Z");
+}
+
+/**
+ * Unit test for StringHelper.isActualCodeAt()
+ */
+function testIsActualCodeAt() {
+	var packerData = new PackerData();
+	var stringHelper = StringHelper.getInstance();
+
+	// empty string analysis : everything is code
+	assert.equal (stringHelper.isActualCodeAt(0, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(20, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(400, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(8000, packerData), true);
+	
+	// two strings, the first one contains a template literal
+	packerData.containedStrings = [ {begin : 20, end : 100}, {begin : 200, end : 300} ];
+	packerData.containedTemplateLiterals = [ {begin : 40, end : 70} ];
+	
+	assert.equal (stringHelper.isActualCodeAt(0, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(19, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(21, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(39, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(41, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(69, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(71, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(99, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(101, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(199, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(201, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(299, packerData), false);
+	assert.equal (stringHelper.isActualCodeAt(301, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(400, packerData), true);
+	assert.equal (stringHelper.isActualCodeAt(8000, packerData), true);
 }
 
 module.exports = runTests;

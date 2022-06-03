@@ -85,17 +85,43 @@ var StringHelper = (function() {
 				return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
 			}).join(''));
 		}
+
+		/**
+		 * Returns whether the contents of the input at the given offset is a string or actual code
+		 * Actual code means either :
+		 *  - outside of a string
+		 *  - inside a string AND inside a template literal
+		 *
+		 * The provided PackerData must have been run through identifyStrings() first.
+		 * 
+		 * @param offset byte offset within the input contents
+		 * @param inputData (constant) PackerData containing the input string and the string identification
+		 */
+		this.isActualCodeAt = function(offset, inputData) {
+			var stringIndex = 0, templateLiteralIndex = 0;			
+			while (stringIndex < inputData.containedStrings.length && inputData.containedStrings[stringIndex].end < offset) {
+				++stringIndex;
+			}
+			while (templateLiteralIndex < inputData.containedTemplateLiterals.length && inputData.containedTemplateLiterals[templateLiteralIndex].end < offset) {
+				++templateLiteralIndex;
+			}
+			
+			var insideString = (stringIndex < inputData.containedStrings.length 
+				&& inputData.containedStrings[stringIndex].begin < offset
+				&& offset < inputData.containedStrings[stringIndex].end);
+			var insideTemplateLiteral = (templateLiteralIndex < inputData.containedTemplateLiterals.length 
+				&& inputData.containedTemplateLiterals[templateLiteralIndex].begin < offset
+				&& offset < inputData.containedTemplateLiterals[templateLiteralIndex].end);
+				
+			return (!insideString) || insideTemplateLiteral;
+		}
 		
 		/**
 		 * Replace all instances of a substring, and record the changes in a transform function
 		 * Use instead of String.replace(/.../g) to get the mapping function needed for the heatwave view.
 		 *
-		 * The matching operation is either done with a string search (set matchExp to false)
-		 * or with a regular expression that is first matched, then the originalText is
-		 * searched and replaced inside the regex match.
-		 * 
-		 * The crusher and packer can prepend and append a dictionary entry to the string.
-		 * In the mapping, this prefix or suffix is mapped to all replaced strings
+		 * Specific version of matchAndReplaceFirstAndAll where all occurrences are replaced with the same text
+		 * @see matchAndReplaceFirstAndAll
 		 *
 		 * @param input input string before replacements (unmodified)
 		 * @param matchExp regular expression to search for (false to match originalText as is)
@@ -108,12 +134,46 @@ var StringHelper = (function() {
 		 * @return the string with all replacements performed
 		 */
 		this.matchAndReplaceAll = function(input, matchExp, originalText, replacementText, prefix, suffix, extraMapping, thermalMap) {
+			return this.matchAndReplaceFirstAndAll(input, matchExp, originalText, replacementText, replacementText, prefix, suffix, extraMapping, thermalMap);
+		}
+
+		
+		/**
+		 * Replace all instances of a substring, and record the changes in a transform function
+		 * Use instead of String.replace(/.../g) to get the mapping function needed for the heatwave view.
+		 *
+		 * The matching operation is either done with a string search (set matchExp to false)
+		 * or with a regular expression that is first matched, then the originalText is
+		 * searched and replaced inside the regex match.
+		 * 
+		 * The crusher and packer can prepend and append a dictionary entry to the string.
+		 * In the mapping, this prefix or suffix is mapped to all replaced strings.
+		 *
+		 * The first match has a different replacement string than the subsequent ones
+		 * This is intended to define a dictionary entry or a variable allocation in the first one.
+		 * In this case, the extra characters (the cost of the allocation) are mapped to all replaced strings.
+		 *
+		 * @param input input string before replacements (unmodified)
+		 * @param matchExp regular expression to search for (false to match originalText as is)
+		 * @param originalText substring to replace within the regex match
+		 * @param firstReplacementText substring to substitute to the first instance of originalText
+		 * @param otherReplacementsText substring to substitute to all but the first instance of originalText
+		 * @param prefix string to prepend to the output, mapped to all matches (use "" if none)
+		 * @param suffix string to append to the output, mapped to all matches (use "" if none)
+		 * @param extraMapping string from another chapter, mapped to all matches, not added here (false if none)
+		 * @param thermalMap array of all successive mapping functions (modified)
+		 * @return the string with all replacements performed
+		 */
+		this.matchAndReplaceFirstAndAll = function(input, matchExp, originalText, firstReplacementText, otherReplacementsText, prefix, suffix, extraMapping, thermalMap) {
 			var mappingFunction = [];
 			var allRangesIn = [];
 			var output = prefix;
 			var inputPointer = 0;
 			var originalTextLength = originalText.length;
-			var replacementTextLength = replacementText.length;
+			var replacementTextLength = otherReplacementsText.length;
+			var initialAllocationLength = otherReplacementsText.length - firstReplacementText.length;
+			var firstReplacementMapping = false;
+			var replacedCopies = 0;
 			var offset = -1;
 			if (matchExp) {
 				let nextMatch = matchExp.exec(input);
@@ -136,13 +196,21 @@ var StringHelper = (function() {
 					output+= input.substring(inputPointer, offset);
 				}
 				// register the replaced text into the mapping
+				// #86 : always use the length of the 2nd+ replacement,
+				// as the extra from the first one, if any, corresponds to the allocation
+				// and will be split on all matches on a dedicated mapping
 				let matchMapping = {
 					chapter : 0,
 					rangeIn : [offset, originalTextLength],
-					rangeOut: [output.length, replacementTextLength]
+					rangeOut: [output.length, replacementTextLength] 
 				};
 				mappingFunction.push(matchMapping);
-				output+= replacementText;
+				if (replacedCopies == 0 && initialAllocationLength > 0) {
+					// #86 : mapping of the allocation (extra length from 1st replacement), later split on all matches
+					firstReplacementMapping = {rangeOut : [output.length+replacementTextLength, initialAllocationLength] };
+				}
+				output+= replacedCopies==0 ? firstReplacementText : otherReplacementsText;
+				++replacedCopies;
 				allRangesIn.push(offset, originalTextLength);
 				
 				inputPointer = offset+originalTextLength;
@@ -185,6 +253,11 @@ var StringHelper = (function() {
 			if (extraMapping) {
 				extraMapping.rangeIn = allRangesIn;
 				mappingFunction.push(extraMapping);
+			}
+			// #86 : Map allocation from first replacement text to all matches
+			if (firstReplacementMapping) {
+				firstReplacementMapping.rangeIn = allRangesIn;
+				mappingFunction.push(firstReplacementMapping);
 			}
 			output+= suffix;
 			
@@ -235,6 +308,31 @@ var StringHelper = (function() {
 			
 			return output;
 		}
+		
+		/**
+		 * Express an array of blocks(ranges) as a character class in a RegExp
+		 * by iteratively calling writeRangeToRegexpCharClass on each range, then concatenating the result
+		 * @see writeRangeToRegexpCharClass
+		 *
+		 * @param allRanges array of objects {first:..., last:..., size:...} to express as a character class 
+		 * @return a string representing the character class, without the encapsulating [ ]
+		 */
+		this.writeBlocksToRegexpCharClass = function(allRanges) {
+			var currentCharClass = "";
+			for (var blockIndex = 0 ; blockIndex < allRanges.length ; ++blockIndex) {
+				let oneRange = allRanges[blockIndex];
+				let rangeString = this.writeRangeToRegexpCharClass(oneRange.first, oneRange.last);
+				// Fix for issue #31 : if a token line begins with "-",
+				// add it at the beginning of the character class instead of appending it
+				if (oneRange.first==45) { // 45 is '-'
+					currentCharClass=rangeString+currentCharClass;
+				} else {
+					currentCharClass+=rangeString;
+				}
+			}
+			return currentCharClass;
+		}
+		
 		
 		/**
 		 * Returns true if the character requires a backlash as a prefix in the character class of the
