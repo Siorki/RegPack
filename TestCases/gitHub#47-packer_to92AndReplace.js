@@ -1,5 +1,5 @@
-	
-! !'#$%&'()*+,-./
+'	'
+'! !#$%&'()*+,-./
 3456789:;<=>?@
 ABCDEFGHIJKLMNOPQRSTUVW
 ]^_`abcdefghijklmnopqrstuvwxyz

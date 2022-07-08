@@ -81,7 +81,10 @@ ShapeShifter.prototype = {
 			}
 		}
 		
-		var inputData = new PackerData ('', input);
+		// #74 , #96 : minification now performed inside the preprocessor, not as a hidden step in the main entry point
+		var minifiedInput = this.minify(input);
+		
+		var inputData = new PackerData ('', minifiedInput);
 		if (options.withMath) {
 			// call module : Define environment
 			this.defineEnvironment(inputData);
@@ -157,6 +160,69 @@ ShapeShifter.prototype = {
 		return inputList;
 	},
 
+	/**
+	 * Performs a light minification on the input string
+	 * 
+	 * Removes C-style comments
+	 * Removes C++ one-line style comments
+	 * Removes spaces, tabs, CR, CR LF
+	 * Replaces ;} with }
+	 * 
+	 * Exception : any string defined inside the program is not modified
+	 * 
+	 * @param input : the string (program) to minify
+	 * @return the same, minified
+	 */
+	minify : function(input) {
+		var output = "";
+		var previousCharCode = 0;
+		var closingSequence = "";
+		var inRemovedSequence = false, inString = false;
+		
+		for (let i=0; i<input.length; ++i) {
+			let currentChar = input[i];
+			let nextCharCode = i<input.length-1 ? input.charCodeAt(i+1) : 0;
+			let testForSequenceEnd = true;
+			if (closingSequence == "") { 
+				// no sequence in progress, detect a beginning
+				testForSequenceEnd = false;
+				if (currentChar == "'" || currentChar == '"' || currentChar == '`') {
+					// #96 : leave string contents untouched, no whitespace removal
+					closingSequence = currentChar;
+					inString = true;
+				}
+				if (input.substr(i,2) == "//") { // C++ style single-line comment
+					closingSequence = "\n";
+					inRemovedSequence = true;
+				}
+			}
+			if (!inRemovedSequence) {
+				let isBlank = "\n\r\t ".indexOf(currentChar) > -1;
+				// all non-blanks are copied
+				// #74 : so are all blanks between expressions or keywords
+				// multiple blanks between expressions are shortened, only the last one is kept
+				let doCopy = (!isBlank) || (this.isCharAllowedInVariable(previousCharCode) && this.isCharAllowedInVariable(nextCharCode));
+				//console.log(currentChar.charCodeAt(0)+" ("+currentChar+") "+doCopy);
+				if (doCopy || inString) { // #96 : no change inside a string
+					output+=currentChar;
+					previousCharCode = currentChar.charCodeAt(0);
+				}
+			}
+			if (testForSequenceEnd) {
+				if (input.substr(i,closingSequence.length) == closingSequence)
+				{
+					i+= closingSequence.length-1;
+					closingSequence = "";
+					inRemovedSequence = false;
+					inString = false;
+				}
+			}
+		}
+		// Remove any semicolon located right before a block ends
+		output = output.replace(/;}/g, "}");
+		return output;
+	},
+	
 	/**
 	 * Modifies the environment execution of the unpacked code, wrapping it into with(Math).
 	 * Removes all references to Math. in the input code

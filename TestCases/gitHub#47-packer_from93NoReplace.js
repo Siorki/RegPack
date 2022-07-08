@@ -1,5 +1,5 @@
-	
-! !'#$%&'()*+,-./
+'	'
+'! !#$%&'()*+,-./
 0123456789:;<=>?@
 ABCDEFGHIJKLMNOPQRSTUVWXYZ
 [\abcdefghijklmnopqrstuvwxyz

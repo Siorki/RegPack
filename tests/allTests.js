@@ -22,6 +22,7 @@ var testIssue0063_backtickFunctionParam = require("./testIssue0063_backtickFunct
 var testIssue0064_utf8EncodeURI = require("./testIssue0064_utf8EncodeURI");
 var testIssue0065_invalidEscapeSequence = require("./testIssue0065_invalidEscapeSequence");
 var testIssue0072_setIntervalNoInitCode = require("./testIssue0072_setIntervalNoInitCode");
+var testIssue0074_keepWhiteSpaceSeparator = require("./testIssue0074_keepWhiteSpaceSeparator");
 var testIssue0076_listVariablesInString = require("./testIssue0076_listVariablesInString");
 var testIssue0082_backticksInTemplateLiterals = require("./testIssue0082_backticksInTemplateLiterals");
 var testIssue0083_backslashToken = require("./testIssue0083_backslashToken");
@@ -30,6 +31,7 @@ var testIssue0087_firstCharacterInPattern = require("./testIssue0087_firstCharac
 var testIssue0088_setIntervalAllocateVariable = require("./testIssue0088_setIntervalAllocateVariable");
 var testIssue0089_emptyThermalMapping = require("./testIssue0089_emptyThermalMapping");
 var testIssue0094_missingVariableBlock = require("./testIssue0094_missingVariableBlock");
+var testIssue0096_multiLineMinification = require("./testIssue0096_multiLineMinification");
 
 // Execute all tests in sequence
 // Recommendation : put new tests at the very beginning while debugging
@@ -58,6 +60,7 @@ testIssue0063_backtickFunctionParam();
 testIssue0064_utf8EncodeURI();
 testIssue0065_invalidEscapeSequence();
 testIssue0072_setIntervalNoInitCode();
+testIssue0074_keepWhiteSpaceSeparator();
 testIssue0076_listVariablesInString();
 testIssue0082_backticksInTemplateLiterals();
 testIssue0083_backslashToken();
@@ -66,3 +69,4 @@ testIssue0087_firstCharacterInPattern();
 testIssue0088_setIntervalAllocateVariable();
 testIssue0089_emptyThermalMapping();
 testIssue0094_missingVariableBlock();
+testIssue0096_multiLineMinification();

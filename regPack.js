@@ -71,8 +71,7 @@ RegPack.prototype = {
 	 * @return An array of PackerData, each containing the code packed with different settings from the preprocessor
 	 */
 	runPacker : function(input, options) {
-		// clear leading/trailing blanks and one-liner comments
-		var input = input.replace(/([\r\n]|^)\s*\/\/.*|[\r\n]+\s*/g,'');
+
 		var default_options = {
 			withMath : false,
 			hash2DContext : false,
