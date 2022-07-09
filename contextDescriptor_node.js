@@ -24,10 +24,12 @@
 			"clearRect",
 			"clip",
 			"closePath",
+			"createConicGradient",
 			"createImageData",
 			"createLinearGradient",
 			"createPattern",
 			"createRadialGradient",
+			"direction",
 			"drawFocusIfNeeded",
 			"drawImage",
 			"ellipse",
@@ -37,12 +39,21 @@
 			"fillText",
 			"filter",
 			"font",
+			"fontKerning",
+			"fontStretch",
+			"fontVariantCaps",
+			"getContextAttributes",
 			"getImageData",
 			"getLineDash",
+			"getTransform",
 			"globalAlpha",
 			"globalCompositeOperation",
+			"imageSmoothingEnabled",
+			"imageSmoothingQuality",
+			"isContextLost",
 			"isPointInPath",
 			"isPointInStroke",
+			"letterSpacing",
 			"lineCap",
 			"lineDashOffset",
 			"lineJoin",
@@ -54,9 +65,11 @@
 			"putImageData",
 			"quadraticCurveTo",
 			"rect",
+			"reset",
 			"resetTransform",
 			"restore",
 			"rotate",
+			"roundRect",
 			"save",
 			"scale",
 			"setLineDash",
@@ -71,22 +84,17 @@
 			"strokeText",
 			"textAlign",
 			"textBaseline",
+			"textRendering",
 			"transform",
 			"translate",
+			"wordSpacing",
 			// Fix for issue #20 : add - make sure the behavior is identical in all browsers
 			// by adding extra methods / properties to the description of 2D context
 			// to even out the property list for all browsers.
-			"getContextAttributes",  // Chrome only, not in FF 
-			"imageSmoothingEnabled",  // Chrome only, not in FF
-			"imageSmoothingQuality",  // Chrome only, not in FF
 			"mozCurrentTransform", // FF-prefixed
 			"mozCurrentTransformInverse", // FF-prefixed
-			"mozDash", // FF-prefixed
-			"mozDashOffset", // FF-prefixed
-			"mozFillRule", // FF-prefixed
 			"mozImageSmoothingEnabled", // FF-prefixed
-			"mozTextStyle", // FF-prefixed
-			"webkitImageSmoothingEnabled" // Webkit-prefixed
+			"mozTextStyle" // FF-prefixed
 			//#32 : removed drawImageFromRect (deprecated, supported up to Chrome 40)
 		], 
 		constants : {}
@@ -308,7 +316,6 @@
 			"STENCIL_CLEAR_VALUE",
 			"STENCIL_FAIL",
 			"STENCIL_FUNC",
-			"STENCIL_INDEX",
 			"STENCIL_INDEX8",
 			"STENCIL_PASS_DEPTH_FAIL",
 			"STENCIL_PASS_DEPTH_PASS",
@@ -482,6 +489,7 @@
 			"isTexture",
 			"lineWidth",
 			"linkProgram",
+			"makeXRCompatible",
 			"pixelStorei",
 			"polygonOffset",
 			"readPixels",
@@ -835,6 +843,8 @@
 	this.audioContextDescription = {
 		properties : [
 			"addEventListener",
+			"audioWorklet",
+			"baseLatency",
 			"close",
 			"createAnalyser",
 			"createBiquadFilter",
@@ -842,6 +852,7 @@
 			"createBufferSource",
 			"createChannelMerger",
 			"createChannelSplitter",
+			"createConstantSource",
 			"createConvolver",
 			"createDelay",
 			"createDynamicsCompressor",
@@ -850,6 +861,7 @@
 			"createMediaElementSource",
 			"createMediaStreamDestination",
 			"createMediaStreamSource",
+			"createMediaStreamTrackSource",
 			"createOscillator",
 			"createPanner",
 			"createPeriodicWave",
@@ -860,8 +872,10 @@
 			"decodeAudioData",
 			"destination",
 			"dispatchEvent",
+			"getOutputTimestamp",
 			"listener",
 			"onstatechange",
+			"outputLatency",
 			"removeEventListener",
 			"resume",
 			"sampleRate",

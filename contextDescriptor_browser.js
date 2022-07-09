@@ -16,7 +16,6 @@
 	var canvas = document.createElement("canvas");
 	var context2D = canvas.getContext("2d");
 	this.canvas2DContextDescription = this.describeContext(context2D);
-	this.balance2DContexts();
 	
 	canvas = document.createElement("canvas");
 	var contextGL = canvas.getContext("webgl");
@@ -27,6 +26,7 @@
 		audioContext = new AudioContext;
 	}
 	this.audioContextDescription = this.describeContext(audioContext);
+	this.balanceContexts(); // all contexts since Firefox 102 / Chromium 103
  }
  
  ContextDescriptor.prototype = {
@@ -47,22 +47,32 @@
 	 * by adding extra methods / properties to the description of 2D context
 	 * to even out the property list for all browsers.
 	 * 
+	 * Update for #97 in July 2022 : GL and Audio contexts also need to be levelled
+	 * 
 	 * Needs to be reconsidered at each new browser revision 
-	 * (current reference are for FF 50 / Chrome 54)
+	 * (current reference are for FF 102 / Chromium 103)
 	 */
-	balance2DContexts : function() {
+	balanceContexts : function() {
+		this.canvas2DContextDescription.properties.push("fontKerning");  // Chrome only
+		this.canvas2DContextDescription.properties.push("fontStretch");  // Chrome only
+		this.canvas2DContextDescription.properties.push("fontVariantCaps");  // Chrome only
 		this.canvas2DContextDescription.properties.push("getContextAttributes");  // Chrome only
-		this.canvas2DContextDescription.properties.push("imageSmoothingEnabled");  // Chrome only
 		this.canvas2DContextDescription.properties.push("imageSmoothingQuality");  // Chrome only
+		this.canvas2DContextDescription.properties.push("isContextLost");  // Chrome only
+		this.canvas2DContextDescription.properties.push("letterSpacing");  // Chrome only
 		this.canvas2DContextDescription.properties.push("mozCurrentTransform"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozCurrentTransformInverse"); // FF-prefixed
-		this.canvas2DContextDescription.properties.push("mozDash"); // FF-prefixed
-		this.canvas2DContextDescription.properties.push("mozDashOffset"); // FF-prefixed
-		this.canvas2DContextDescription.properties.push("mozFillRule"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozImageSmoothingEnabled"); // FF-prefixed
 		this.canvas2DContextDescription.properties.push("mozTextStyle"); // FF-prefixed
-		this.canvas2DContextDescription.properties.push("webkitImageSmoothingEnabled"); // Webkit-prefixed
-		//#32 : removed drawImageFromRect (deprecated, supported up to Chrome 40)
+		this.canvas2DContextDescription.properties.push("reset");  // Chrome only
+		this.canvas2DContextDescription.properties.push("roundRect");  // Chrome only
+		this.canvas2DContextDescription.properties.push("textRendering");  // Chrome only
+		this.canvas2DContextDescription.properties.push("wordSpacing");  // Chrome only
 
-	}
+		this.canvasGLContextDescription.properties.push("makeXRCompatible");  // Chrome only
+		
+		this.audioContextDescription.properties.push("createMediaStreamTrackSource"); // Firefox only
+	},
+	
+
  }
