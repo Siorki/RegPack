@@ -195,6 +195,14 @@ ShapeShifter.prototype = {
 					closingSequence = "\n";
 					inRemovedSequence = true;
 				}
+				if (input.substr(i,2) == "/*") { // C multi-line comment
+					closingSequence = "*/";
+					inRemovedSequence = true;
+				}
+				if (input.substr(i,4) == "<!--") { // XML multi-line comment
+					closingSequence = "-->";
+					inRemovedSequence = true;
+				}
 			}
 			if (!inRemovedSequence) {
 				let isBlank = "\n\r\t ".indexOf(currentChar) > -1;
