@@ -1,8 +1,12 @@
-v6.0
+v5.0.4 - July 2022
 
-New features :
+Fixed bugs
 - #59 : Negated char class : optimal range merge
+- #74 : Line break removed, leaving no separator between instructions
+- #79 : Discard C-style and xml-style comments
 - #86 : Shorten context properties using available variable names
+- #96 : Do not remove newlines or trailing blanks in template literals
+- #97 : setTransform turns into getTransform on Chrome
 
 ------------------------------
 v5.0.3 - February 2019
